@@ -1,0 +1,2 @@
+include ':app', ':rust-lib'
+rootProject.name='shielded-android-ndk-api'
