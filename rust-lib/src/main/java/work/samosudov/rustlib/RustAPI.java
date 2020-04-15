@@ -117,6 +117,8 @@ public class RustAPI {
 
     public static native byte[] encryptNp(final byte[] key,
                                           final byte[] cipher);
+    public static native byte[] kdfSapling(final byte[] dhsecret,
+                                          final byte[] epk);
 
     //endregion
 

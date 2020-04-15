@@ -22,6 +22,12 @@ class RustAPITest {
     }
 
     @Test
+    fun testKdf() {
+        val res1 = RustAPI.kdfSapling(ByteArray(32), ByteArray(32))
+        println("testKdf res1 = ${Arrays.toString(res1)}")
+    }
+
+    @Test
     fun encryptNp() {
         val res1 = RustAPI.encryptNp(key, note + ByteArray(512))
         println("res1 = ${Arrays.toString(res1)}")

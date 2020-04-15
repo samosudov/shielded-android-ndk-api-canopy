@@ -19,6 +19,7 @@ zcash_client_backend = { path = "zcash_client_backend" }
 zcash_primitives = { path = "zcash_primitives" }
 zcash_proofs = { path = "zcash_proofs" }
 zip32 = { path = "zip32" }
+blake2b_simd = "0.5"
 
 [dependencies.blake2-rfc]
 git = "https://github.com/gtank/blake2-rfc"

@@ -11,6 +11,7 @@ extern crate zcash_client_backend;
 extern crate zcash_primitives;
 extern crate zcash_proofs;
 extern crate zip32;
+extern crate blake2b_simd;
 
 mod hashreader;
 
@@ -22,6 +23,8 @@ use ff::{PrimeField, PrimeFieldRepr, Field};
 use pairing::bls12_381::{Bls12, Fr, FrRepr};
 use pairing::{Engine};
 use bellman::{Circuit, SynthesisError, ConstraintSystem};
+use blake2_rfc::blake2b::{Blake2b, Blake2bResult};
+use blake2b_simd::{Hash as Blake2bHash, Params as Blake2bParams};
 
 use sapling_crypto::{
     circuit::{
@@ -98,6 +101,8 @@ const COMPACT_NOTE_SIZE: usize = (
 const NOTE_PLAINTEXT_SIZE: usize = COMPACT_NOTE_SIZE + 512;
 const SAPLING_TREE_DEPTH: usize = 32;
 const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + 16;
+
+pub const KDF_SAPLING_PERSONALIZATION: &'static [u8; 16] = b"Zcash_SaplingKDF";
 
 fn is_small_order<Order>(p: &edwards::Point<Bls12, Order>) -> bool {
     p.double(&JUBJUB).double(&JUBJUB).double(&JUBJUB) == edwards::Point::zero()
@@ -1231,23 +1236,32 @@ fn address_from_extfvk(extfvk: &ExtendedFullViewingKey) -> String {
 }
 
 
-//#[no_mangle]
-//pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_kdfSapling(
-//    env: JNIEnv<'_>,
-//    _: JClass<'_>,
-//    dhsecret: jbyteArray,
-//    epk: jbyteArray
-//) -> jbyteArray {
-//    let mut input = [0u8; 64];
-//    dhsecret.write(&mut input[0..32]).unwrap();
-//    epk.write(&mut input[32..64]).unwrap();
-//
-//    Blake2bParams::new()
-//        .hash_length(32)
-//        .personal(KDF_SAPLING_PERSONALIZATION)
-//        .hash(&input)
-//        .as_bytes()
-//}
+#[no_mangle]
+pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_kdfSapling(
+    env: JNIEnv<'_>,
+    _: JClass<'_>,
+    dhsecret: jbyteArray,
+    epk: jbyteArray
+) -> jbyteArray {
+
+    let dhsecret = env.convert_byte_array(dhsecret).unwrap();
+    let epk = env.convert_byte_array(epk).unwrap();
+
+    let mut input = vec![];
+
+    input.extend_from_slice(&dhsecret);
+    input.extend_from_slice(&epk);
+
+    //let output: &[u8] = &[];
+    let output = Blake2bParams::new()
+        .hash_length(32)
+        .personal(KDF_SAPLING_PERSONALIZATION)
+        .hash(&input.as_slice())
+        .as_bytes()
+        .to_vec();
+
+    env.byte_array_from_slice(&output).expect("Could not convert u8 vec into java byte array!")
+}
 
 //fn kdf_sapling(
 //    dhsecret: edwards::Point<Bls12, PrimeOrder>,
