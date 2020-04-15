@@ -1043,7 +1043,7 @@ pub extern "system" fn librustzcash_sapling_verification_ctx_free(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn Java_com_guarda_zcash_RustAPI_initWallet(
+pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_initWallet(
     env: JNIEnv<'_>,
     _: JClass<'_>,
     seed: jbyteArray,
@@ -1055,7 +1055,7 @@ pub unsafe extern "C" fn Java_com_guarda_zcash_RustAPI_initWallet(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn Java_com_guarda_zcash_RustAPI_dPart(
+pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_dPart(
     env: JNIEnv<'_>,
     _: JClass<'_>,
     seed: jbyteArray,
@@ -1112,7 +1112,7 @@ pub unsafe extern "C" fn Java_com_guarda_zcash_RustAPI_dPart(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn Java_com_guarda_zcash_RustAPI_getExtsk(
+pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_getExtsk(
     env: JNIEnv<'_>,
     _: JClass<'_>,
     seed: jbyteArray,
@@ -1135,7 +1135,7 @@ pub unsafe extern "C" fn Java_com_guarda_zcash_RustAPI_getExtsk(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn Java_com_guarda_zcash_RustAPI_compactDecrypt(
+pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_compactDecrypt(
     env: JNIEnv<'_>,
     _: JClass<'_>,
     key: jbyteArray,
@@ -1169,7 +1169,7 @@ pub unsafe extern "C" fn Java_com_guarda_zcash_RustAPI_compactDecrypt(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn Java_com_guarda_zcash_RustAPI_encryptNp(
+pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_encryptNp(
     env: JNIEnv<'_>,
     _: JClass<'_>,
     key: jbyteArray,
@@ -1204,7 +1204,7 @@ pub fn spending_key(seed: &[u8], coin_type: u32, account: u32) -> ExtendedSpendi
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn Java_com_guarda_zcash_RustAPI_zAddrFromWif(
+pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_zAddrFromWif(
     env: JNIEnv<'_>,
     _: JClass<'_>,
     seed: jbyteArray,
@@ -1229,3 +1229,37 @@ fn address_from_extfvk(extfvk: &ExtendedFullViewingKey) -> String {
     encode_payment_address(HRP_SAPLING_PAYMENT_ADDRESS_MAIN, &addr)
     //encode_payment_address(HRP_SAPLING_PAYMENT_ADDRESS_TEST, &addr)
 }
+
+
+//#[no_mangle]
+//pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_kdfSapling(
+//    env: JNIEnv<'_>,
+//    _: JClass<'_>,
+//    dhsecret: jbyteArray,
+//    epk: jbyteArray
+//) -> jbyteArray {
+//    let mut input = [0u8; 64];
+//    dhsecret.write(&mut input[0..32]).unwrap();
+//    epk.write(&mut input[32..64]).unwrap();
+//
+//    Blake2bParams::new()
+//        .hash_length(32)
+//        .personal(KDF_SAPLING_PERSONALIZATION)
+//        .hash(&input)
+//        .as_bytes()
+//}
+
+//fn kdf_sapling(
+//    dhsecret: edwards::Point<Bls12, PrimeOrder>,
+//    epk: &edwards::Point<Bls12, PrimeOrder>,
+//) -> Blake2bHash {
+//    let mut input = [0u8; 64];
+//    dhsecret.write(&mut input[0..32]).unwrap();
+//    epk.write(&mut input[32..64]).unwrap();
+
+//    Blake2bParams::new()
+//      .hash_length(32)
+//        .personal(KDF_SAPLING_PERSONALIZATION)
+//        .hash(&input)
+//        .as_bytes()
+//}

@@ -10,11 +10,11 @@ import org.junit.Test
  */
 class ExampleUnitTest {
 
-    companion object {
-        init {
-            System.loadLibrary("native-lib")
-        }
-    }
+//    companion object {
+//        init {
+//            System.loadLibrary("native-lib")
+//        }
+//    }
 
     @Test
     fun addition_isCorrect() {
