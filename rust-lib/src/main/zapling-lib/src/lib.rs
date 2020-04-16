@@ -102,7 +102,8 @@ const NOTE_PLAINTEXT_SIZE: usize = COMPACT_NOTE_SIZE + 512;
 const SAPLING_TREE_DEPTH: usize = 32;
 const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + 16;
 
-pub const KDF_SAPLING_PERSONALIZATION: &'static [u8; 16] = b"Zcash_SaplingKDF";
+pub const KDF_SAPLING_PERSONALIZATION: &[u8; 16] = b"Zcash_SaplingKDF";
+pub const PRF_OCK_PERSONALIZATION: &[u8; 16] = b"Zcash_Derive_ock";
 
 fn is_small_order<Order>(p: &edwards::Point<Bls12, Order>) -> bool {
     p.double(&JUBJUB).double(&JUBJUB).double(&JUBJUB) == edwards::Point::zero()
@@ -1252,7 +1253,6 @@ pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_kdfSapling(
     input.extend_from_slice(&dhsecret);
     input.extend_from_slice(&epk);
 
-    //let output: &[u8] = &[];
     let output = Blake2bParams::new()
         .hash_length(32)
         .personal(KDF_SAPLING_PERSONALIZATION)
@@ -1263,17 +1263,34 @@ pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_kdfSapling(
     env.byte_array_from_slice(&output).expect("Could not convert u8 vec into java byte array!")
 }
 
-//fn kdf_sapling(
-//    dhsecret: edwards::Point<Bls12, PrimeOrder>,
-//    epk: &edwards::Point<Bls12, PrimeOrder>,
-//) -> Blake2bHash {
-//    let mut input = [0u8; 64];
-//    dhsecret.write(&mut input[0..32]).unwrap();
-//    epk.write(&mut input[32..64]).unwrap();
+#[no_mangle]
+pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_prfOck(
+    env: JNIEnv<'_>,
+    _: JClass<'_>,
+    ovk: jbyteArray,
+    cv: jbyteArray,
+    cmu: jbyteArray,
+    epk: jbyteArray
+) -> jbyteArray {
 
-//    Blake2bParams::new()
-//      .hash_length(32)
-//        .personal(KDF_SAPLING_PERSONALIZATION)
-//        .hash(&input)
-//        .as_bytes()
-//}
+    let ovk = env.convert_byte_array(ovk).unwrap();
+    let cv = env.convert_byte_array(cv).unwrap();
+    let cmu = env.convert_byte_array(cmu).unwrap();
+    let epk = env.convert_byte_array(epk).unwrap();
+
+    let mut input = vec![];
+
+    input.extend_from_slice(&ovk);
+    input.extend_from_slice(&cv);
+    input.extend_from_slice(&cmu);
+    input.extend_from_slice(&epk);
+
+    let output = Blake2bParams::new()
+        .hash_length(32)
+        .personal(PRF_OCK_PERSONALIZATION)
+        .hash(&input.as_slice())
+        .as_bytes()
+        .to_vec();
+
+    env.byte_array_from_slice(&output).expect("Could not convert u8 vec into java byte array!")
+}

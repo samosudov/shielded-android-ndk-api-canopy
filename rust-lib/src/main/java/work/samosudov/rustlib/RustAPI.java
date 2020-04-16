@@ -119,6 +119,10 @@ public class RustAPI {
                                           final byte[] cipher);
     public static native byte[] kdfSapling(final byte[] dhsecret,
                                           final byte[] epk);
+    public static native byte[] prfOck(final byte[] ovk,
+                                       final byte[] cv,
+                                       final byte[] cmu,
+                                           final byte[] epk);
 
     //endregion
 

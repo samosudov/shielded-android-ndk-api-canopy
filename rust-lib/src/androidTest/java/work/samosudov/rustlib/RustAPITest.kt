@@ -28,6 +28,13 @@ class RustAPITest {
     }
 
     @Test
+    fun testPrfOck() {
+        val res1 = RustAPI.prfOck(ByteArray(32), ByteArray(32), ByteArray(32), ByteArray(32))
+        println("testPrfOck res1 = ${Arrays.toString(res1)}")
+//        testPrfOck res1 = [-128, 53, 125, -116, -71, -93, 54, -120, 9, -106, -115, 123, -42, -98, -78, -79, -70, -57, -13, -37, -30, -80, 89, -24, -60, 100, 120, 62, 79, -103, -107, -99]
+    }
+
+    @Test
     fun encryptNp() {
         val res1 = RustAPI.encryptNp(key, note + ByteArray(512))
         println("res1 = ${Arrays.toString(res1)}")
