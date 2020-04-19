@@ -114,6 +114,8 @@ public class RustAPI {
     public static native String getExtsk(final byte[] data);
     public static native byte[] compactDecrypt(final byte[] key,
                                                    final byte[] cipher);
+    public static native byte[] fullDecrypt(final byte[] key,
+                                               final byte[] cipher);
 
     public static native byte[] encryptNp(final byte[] key,
                                           final byte[] cipher);

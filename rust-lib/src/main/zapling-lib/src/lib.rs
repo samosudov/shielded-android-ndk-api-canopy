@@ -1175,6 +1175,32 @@ pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_compactDecrypt(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_fullDecrypt(
+    env: JNIEnv<'_>,
+    _: JClass<'_>,
+    key: jbyteArray,
+    enc_ciphertext: jbyteArray,
+) -> jbyteArray {
+
+    let key = env.convert_byte_array(key).unwrap();
+    let enc_ciphertext = env.convert_byte_array(enc_ciphertext).unwrap();
+
+    assert_eq!(enc_ciphertext.len(), ENC_CIPHERTEXT_SIZE);
+
+    let mut plaintext = [0; ENC_CIPHERTEXT_SIZE];
+    ChachaPolyIetf::aead_cipher()
+                .open_to(
+                    &mut plaintext,
+                    &enc_ciphertext,
+                    &[],
+                    &key,
+                    &[0u8; 12]
+                );
+
+    env.byte_array_from_slice(&plaintext).expect("Could not convert u8 vec into java byte array!")
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_encryptNp(
     env: JNIEnv<'_>,
     _: JClass<'_>,

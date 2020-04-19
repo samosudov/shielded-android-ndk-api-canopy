@@ -3,6 +3,7 @@ package work.samosudov.rustlib
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Before
 import org.junit.Test
+import work.samosudov.rustlib.crypto.Utils.hexToBytes
 import java.util.*
 
 class RustAPITest {
@@ -32,6 +33,15 @@ class RustAPITest {
         val res1 = RustAPI.prfOck(ByteArray(32), ByteArray(32), ByteArray(32), ByteArray(32))
         println("testPrfOck res1 = ${Arrays.toString(res1)}")
 //        testPrfOck res1 = [-128, 53, 125, -116, -71, -93, 54, -120, 9, -106, -115, 123, -42, -98, -78, -79, -70, -57, -13, -37, -30, -80, 89, -24, -60, 100, 120, 62, 79, -103, -107, -99]
+    }
+
+    @Test
+    fun testFullDecrypt() {
+        val k = byteArrayOf(2, 50, -105, -8, -98, -12, 80, 68, -16, 86, 70, -122, 101, -56, 30, -69, -24, 98, -29, -89, -126, -103, -113, 123, 120, 54, -104, 20, -124, 125, -39, -51)
+        val cipherText = hexToBytes("d59585c9968a30b693f602c3c6edf470f9db660195994c3e7db001b884f70f257211d76f70cbbbfe3540c616ac5cb46fad6f995127f97ba26abac68af7d7003469b88d47176f248895fb4a7c34098044ef8fb6c22df7dac7ac4ab54b6beb68b17fa4ed5799a57e03d5ea044c55901b16cd44fb066c78f4a27094666767c80e355706ae4f38172fdebd92150ab3f2816f521664274c14db625b237dd52845d84c67f10bba2525cf9f1608a3c6e6b0df565108d2f1b61a0a0b7d24320000645863ba6eeba9401504cac3a74c82b03d486d32e424673e6a4e1f747cd79ec8801aef680e59c87a61d0c16a5125eb4f57664e19b33be0e69bd7bff5b5411db9e5993579279b3ef4daa4797ce15a0c4693da8b2e88c3c1027e41a582ecc20b561159b74428938f518a7f121ff00d049ad38ad0bc622ad4885547d0dc726e439f58ec056a786de77a93f4d6395d34aacb84f89861477dc688451afeba065c7f58c6a9cad80fded6030ed1406fef796131b14f683888df9d96c915c00e086b653c3ea6f48075b2bb2b966d5e877c4b58ea06cb12b28fb7562cc9e08995e40b5b064a871f26bb083cbf3bc596d1b3673ab5c80b63448019b7031d28eb7292639dc8e68ead3e395b176bcc4af78f72ca740c3e1fef09af957ed207a71ea147276edf9d20f47cf321fb0feabe3c26bd6b4ba0d74356e1f0195b9640d2b57232426e8ac4533f6efb1d7c3409e6731f83e0fbaed1736af85ba8da53e7cc0d1d6c375fe3530fb06dd692d2f765e0c56449353f2552c3a6dc69954b46533e1c9c4a43d36dc9ceb88c968e97")
+        val res1 = RustAPI.fullDecrypt(k, cipherText).drop(52).toByteArray() // 580
+        println("testFullDecrypt res1 = ${Arrays.toString(res1)}")
+        println("testFullDecrypt res1 text = ${String(res1)}")
     }
 
     @Test
