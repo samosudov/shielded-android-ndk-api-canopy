@@ -102,6 +102,13 @@ const NOTE_PLAINTEXT_SIZE: usize = COMPACT_NOTE_SIZE + 512;
 const SAPLING_TREE_DEPTH: usize = 32;
 const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + 16;
 
+const OUT_PLAINTEXT_SIZE: usize = (
+    32 + // pk_d
+    32
+    // esk
+);
+const OUT_CIPHERTEXT_SIZE: usize = OUT_PLAINTEXT_SIZE + 16;
+
 pub const KDF_SAPLING_PERSONALIZATION: &[u8; 16] = b"Zcash_SaplingKDF";
 pub const PRF_OCK_PERSONALIZATION: &[u8; 16] = b"Zcash_Derive_ock";
 
@@ -1317,6 +1324,24 @@ pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_prfOck(
         .hash(&input.as_slice())
         .as_bytes()
         .to_vec();
+
+    env.byte_array_from_slice(&output).expect("Could not convert u8 vec into java byte array!")
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_encryptOutgoing(
+    env: JNIEnv<'_>,
+    _: JClass<'_>,
+    key: jbyteArray,
+    message: jbyteArray,
+) -> jbyteArray {
+
+    let key = env.convert_byte_array(key).unwrap();
+    let message = env.convert_byte_array(message).unwrap();
+
+    let mut output = [0u8; OUT_CIPHERTEXT_SIZE];
+    ChachaPolyIetf::aead_cipher()
+                    .seal_to(&mut output, &message, &[], &key, &[0u8; 12]);
 
     env.byte_array_from_slice(&output).expect("Could not convert u8 vec into java byte array!")
 }

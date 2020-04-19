@@ -45,6 +45,13 @@ class RustAPITest {
     }
 
     @Test
+    fun testEncryptOutgoing() {
+        val k = byteArrayOf(2, 50, -105, -8, -98, -12, 80, 68, -16, 86, 70, -122, 101, -56, 30, -69, -24, 98, -29, -89, -126, -103, -113, 123, 120, 54, -104, 20, -124, 125, -39, -51)
+        val res1 = RustAPI.encryptOutgoing(k, ByteArray(64))
+        println("testFullDecrypt res1 = ${Arrays.toString(res1)}")
+    }
+
+    @Test
     fun encryptNp() {
         val res1 = RustAPI.encryptNp(key, note + ByteArray(512))
         println("res1 = ${Arrays.toString(res1)}")

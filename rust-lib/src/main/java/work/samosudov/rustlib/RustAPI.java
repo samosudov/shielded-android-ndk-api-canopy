@@ -125,6 +125,8 @@ public class RustAPI {
                                        final byte[] cv,
                                        final byte[] cmu,
                                            final byte[] epk);
+    public static native byte[] encryptOutgoing(final byte[] key,
+                                       final byte[] message);
 
     //endregion
 
