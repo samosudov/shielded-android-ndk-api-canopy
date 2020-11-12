@@ -92,6 +92,17 @@ Java_work_samosudov_rustlib_RustAPI_genr(
 }
 
 JNIEXPORT jstring JNICALL
+Java_work_samosudov_rustlib_RustAPI_genRseed(
+        JNIEnv *env,
+        jobject /* this */) {
+    uint256 r;
+    librustzcash_sapling_generate_rseed(r.begin());
+
+    std::string strHex = r.GetHex();
+    return env->NewStringUTF(strHex.c_str());
+}
+
+JNIEXPORT jstring JNICALL
 Java_work_samosudov_rustlib_RustAPI_epk(
         JNIEnv *env,
         jobject,
@@ -387,69 +398,6 @@ Java_work_samosudov_rustlib_RustAPI_ivkToPdk(
 }
 
 JNIEXPORT jstring JNICALL
-Java_work_samosudov_rustlib_RustAPI_checkout(
-        JNIEnv *env,
-        jobject,
-        jstring cv,
-        jstring cm,
-        jstring ephemeralKey,
-        jstring zkproof) {
-
-    auto verctx = librustzcash_sapling_verification_ctx_init();
-
-    // cv to unsigned char array
-    std::string cpstrCv = env->GetStringUTFChars(cv, NULL);
-    std::vector<char> bytesCv;
-    for (unsigned int i = 0; i < cpstrCv.length(); i += 2) {
-        std::string byteString = cpstrCv.substr(i, 2);
-        char byte = (char) strtol(byteString.c_str(), NULL, 16);
-        bytesCv.push_back(byte);
-    }
-    unsigned char* resCv = new unsigned char[bytesCv.size()];
-    std::copy(bytesCv.begin(), bytesCv.end(), resCv);
-    // cm to unsigned char array
-    std::string cpstrCm = env->GetStringUTFChars(cm, NULL);
-    std::vector<char> bytesCm;
-    for (unsigned int i = 0; i < cpstrCm.length(); i += 2) {
-        std::string byteString = cpstrCm.substr(i, 2);
-        char byte = (char) strtol(byteString.c_str(), NULL, 16);
-        bytesCm.push_back(byte);
-    }
-    unsigned char* resCm = new unsigned char[bytesCm.size()];
-    std::copy(bytesCm.begin(), bytesCm.end(), resCm);
-    // ephemeralKey to unsigned char array
-    std::string cpstrEk = env->GetStringUTFChars(ephemeralKey, NULL);
-    std::vector<char> bytesEk;
-    for (unsigned int i = 0; i < cpstrEk.length(); i += 2) {
-        std::string byteString = cpstrEk.substr(i, 2);
-        char byte = (char) strtol(byteString.c_str(), NULL, 16);
-        bytesEk.push_back(byte);
-    }
-    unsigned char* resEk = new unsigned char[bytesEk.size()];
-    std::copy(bytesEk.begin(), bytesEk.end(), resEk);
-    // zkproof to unsigned char array
-    std::string cpstrZk = env->GetStringUTFChars(zkproof, NULL);
-    std::vector<char> bytesZk;
-    for (unsigned int i = 0; i < cpstrZk.length(); i += 2) {
-        std::string byteString = cpstrZk.substr(i, 2);
-        char byte = (char) strtol(byteString.c_str(), NULL, 16);
-        bytesZk.push_back(byte);
-    }
-    unsigned char* resZk = new unsigned char[bytesZk.size()];
-    std::copy(bytesZk.begin(), bytesZk.end(), resZk);
-
-    __android_log_print(ANDROID_LOG_DEBUG, "LOG_TAG", "cpstrZk=[%02x]...[%02x] size=[%lu]", resZk[0], resZk[bytesZk.size()], bytesZk.size());
-
-    uint256 cvunt = uint256S(cpstrCv);
-
-    std::uint32_t hello = librustzcash_sapling_check_output(verctx, resCv, resCm, resEk, resZk);
-    librustzcash_sapling_verification_ctx_free(verctx);
-    std::string s = std::to_string(hello);
-
-    return env->NewStringUTF(s.c_str());
-}
-
-JNIEXPORT jstring JNICALL
 Java_work_samosudov_rustlib_RustAPI_merkelHash(
         JNIEnv *env,
         jobject,
@@ -701,21 +649,6 @@ Java_work_samosudov_rustlib_RustAPI_spendProof(
     return array;
 }
 
-JNIEXPORT jbyte JNICALL
-Java_work_samosudov_rustlib_RustAPI_toByteMerklePath(
-        JNIEnv *env,
-        jobject,
-        jbyte pathByte,
-        jboolean authPathBool,
-        jint p) {
-
-    unsigned char pb = static_cast<unsigned char>(pathByte);
-    pb |= authPathBool << (7-(p % 8));
-
-    signed char res = static_cast<signed char>(pb);
-    return res;
-}
-
 JNIEXPORT jbyteArray JNICALL
 Java_work_samosudov_rustlib_RustAPI_vectorToInt(
         JNIEnv *env,
@@ -816,107 +749,6 @@ Java_work_samosudov_rustlib_RustAPI_spendSig(
 
     jbyteArray array = env->NewByteArray(64);
     env->SetByteArrayRegion (array, 0, 64, reinterpret_cast<jbyte*>(spsigtest));
-    return array;
-}
-
-JNIEXPORT jstring JNICALL
-Java_work_samosudov_rustlib_RustAPI_testVerify(
-        JNIEnv *env,
-        jobject,
-        jstring sp,
-        jstring sigHash,
-        jstring bsig) {
-
-    std::string spStr = env->GetStringUTFChars(sp, NULL);
-
-    SpendDescription spend;
-    CDataStream ss(ParseHex(spStr), SER_NETWORK, PROTOCOL_VERSION);
-    ss >> spend;
-
-    std::string sigStr = env->GetStringUTFChars(sigHash, NULL);
-    uint256 dataToBeSigned = uint256S(sigStr);
-
-    auto ctx = librustzcash_sapling_verification_ctx_init();
-
-    if (!librustzcash_sapling_check_spend(
-            ctx,
-            spend.cv.begin(),
-            spend.anchor.begin(),
-            spend.nullifier.begin(),
-            spend.rk.begin(),
-            spend.zkproof.begin(),
-            spend.spendAuthSig.begin(),
-            dataToBeSigned.begin()))
-    {
-        librustzcash_sapling_verification_ctx_free(ctx);
-        std::string hello = "librustzcash_sapling_check_spend=false";
-        return env->NewStringUTF(hello.c_str());
-    };
-
-    // bsig hex to unsigned char array
-    std::string cpstrData = env->GetStringUTFChars(bsig, NULL);
-    std::vector<char> bytesData;
-    for (unsigned int i = 0; i < cpstrData.length(); i += 2) {
-        std::string byteString = cpstrData.substr(i, 2);
-        char byte = (char) strtol(byteString.c_str(), NULL, 16);
-        bytesData.push_back(byte);
-    }
-    unsigned char* resBsig = new unsigned char[64];
-    std::copy(bytesData.begin(), bytesData.end(), resBsig);
-
-    // valueBalance
-    int64_t value = 54321;
-
-    if (!librustzcash_sapling_final_check(
-            ctx,
-            value,
-            resBsig,
-            dataToBeSigned.begin()))
-    {
-        librustzcash_sapling_verification_ctx_free(ctx);
-        std::string hello = "librustzcash_sapling_final_check=false";
-        return env->NewStringUTF(hello.c_str());
-    }
-
-    librustzcash_sapling_verification_ctx_free(ctx);
-
-    std::string res = "testVerify completed";
-    return env->NewStringUTF(res.c_str());
-}
-
-JNIEXPORT jstring JNICALL
-Java_work_samosudov_rustlib_RustAPI_testUint256(
-        JNIEnv *env,
-        jobject,
-        jstring str) {
-
-    // PKD to uint256
-    std::string cpstr = env->GetStringUTFChars(str, NULL);
-    uint256 res;
-    res.SetHex(cpstr);
-
-    std::string strHex = res.GetHex();
-    return env->NewStringUTF(strHex.c_str());
-}
-
-JNIEXPORT jbyteArray JNICALL
-Java_work_samosudov_rustlib_RustAPI_testToArr(
-        JNIEnv *env,
-        jobject,
-        jstring str) {
-
-    std::string cpstrCph = env->GetStringUTFChars(str, NULL);
-    std::vector<char> bytesCph;
-    for (unsigned int i = 0; i < cpstrCph.length(); i += 2) {
-        std::string byteString = cpstrCph.substr(i, 2);
-        char byte = (char) strtol(byteString.c_str(), NULL, 16);
-        bytesCph.push_back(byte);
-    }
-    unsigned char* resCph = new unsigned char[bytesCph.size()];
-    std::copy(bytesCph.begin(), bytesCph.end(), resCph);
-
-    jbyteArray array = env->NewByteArray(52);
-    env->SetByteArrayRegion (array, 0, 52, reinterpret_cast<jbyte*>(resCph));
     return array;
 }
 

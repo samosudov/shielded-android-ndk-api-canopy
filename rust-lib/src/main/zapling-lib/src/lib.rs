@@ -20,7 +20,7 @@ extern crate lazy_static;
 
 use crypto_api_chachapoly::{ChaCha20Ietf, ChachaPolyIetf};
 use ff::{PrimeField, PrimeFieldRepr, Field};
-use pairing::bls12_381::{Bls12, Fr, FrRepr};
+use pairing::bls12_381::{Bls12, Fr, FrRepr, Scalar};
 use pairing::{Engine};
 use bellman::{Circuit, SynthesisError, ConstraintSystem};
 use blake2_rfc::blake2b::{Blake2b, Blake2bResult};
@@ -202,6 +202,18 @@ pub extern "system" fn librustzcash_sapling_generate_r(result: *mut [c_uchar; 32
     r.into_repr()
         .write_le(&mut result[..])
         .expect("result must be 32 bytes");
+}
+
+/// Random Rseed for Canopy update (instead of rcm param)
+#[no_mangle]
+pub extern "system" fn librustzcash_sapling_generate_rseed(result: *mut [c_uchar; 32]) {
+    let mut rng = OsRng::new().expect("should be able to construct RNG");
+
+    let mut buffer = [0u8; 32];
+    rng.fill_bytes(&mut buffer);
+
+    let result = unsafe { &mut *result };
+    result.copy_from_slice(&buffer);
 }
 
 #[no_mangle]
@@ -549,81 +561,6 @@ pub extern "system" fn librustzcash_ivk_to_pkd(
 }
 
 #[no_mangle]
-pub extern "system" fn librustzcash_sapling_check_output(
-    ctx: *mut SaplingVerificationContext,
-    cv: *const [c_uchar; 32],
-    cm: *const [c_uchar; 32],
-    epk: *const [c_uchar; 32],
-    zkproof: *const [c_uchar; GROTH_PROOF_SIZE],
-) -> u32 {
-//lazy_static::initialize(&JUBJUB);
-
-let mut res: u32 = 0;
-res = 1;
-    // Deserialize the value commitment
-    let cv = match edwards::Point::<Bls12, Unknown>::read(&(unsafe { &*cv })[..], &JUBJUB) {
-        Ok(p) => p,
-        Err(_) => return res,
-    };
-res = 2;
-    if is_small_order(&cv) {
-        return res;
-    }
-
-    // Accumulate the value commitment in the context
-    {
-        let mut tmp = cv.clone();
-        tmp = tmp.negate(); // Outputs subtract from the total.
-        tmp = tmp.add(&unsafe { &*ctx }.bvk, &JUBJUB);
-
-        // Update the context
-        unsafe { &mut *ctx }.bvk = tmp;
-    }
-
-res = 3;
-    // Deserialize the commitment, which should be an element
-    // of Fr.
-    let cm = match Fr::from_repr(read_le(&(unsafe { &*cm })[..])) {
-        Ok(a) => a,
-        Err(_) => return res,
-    };
-res = 4;
-    // Deserialize the ephemeral key
-    let epk = match edwards::Point::<Bls12, Unknown>::read(&(unsafe { &*epk })[..], &JUBJUB) {
-        Ok(p) => p,
-        Err(_) => return res,
-    };
-res = 5;
-    if is_small_order(&epk) {
-        return res;
-    }
-
-    // Construct public input for circuit
-    let mut public_input = [Fr::zero(); 5];
-    {
-        let (x, y) = cv.into_xy();
-        public_input[0] = x;
-        public_input[1] = y;
-    }
-    {
-        let (x, y) = epk.into_xy();
-        public_input[2] = x;
-        public_input[3] = y;
-    }
-    public_input[4] = cm;
-res = 6;
-    // Deserialize the proof
-    let zkproof = match Proof::<Bls12>::read(&(unsafe { &*zkproof })[..]) {
-        Ok(p) => p,
-        Err(_) => return res,
-    };
-res = 7;
-
-
-    res
-}
-
-#[no_mangle]
 pub extern "system" fn librustzcash_merkle_hash(
     depth: size_t,
     a: *const [c_uchar; 32],
@@ -939,91 +876,6 @@ pub extern "system" fn librustzcash_sapling_final_check(
 }
 
 #[no_mangle]
-pub extern "system" fn librustzcash_test_verify() {
-
-                let rng = &mut thread_rng();
-
-                let params = generate_random_parameters::<Bls12, _, _>(
-                    MySillyCircuit { a: None, b: None },
-                    rng
-                ).unwrap();
-
-                {
-                    let mut v = vec![];
-
-                    params.write(&mut v).unwrap();
-                    assert_eq!(v.len(), 2136);
-
-                    let de_params = Parameters::read(&v[..], true).unwrap();
-                    assert!(params == de_params);
-
-                    let de_params = Parameters::read(&v[..], false).unwrap();
-                    assert!(params == de_params);
-                }
-
-                let pvk = prepare_verifying_key::<Bls12>(&params.vk);
-
-                let a = Fr::rand(rng);
-                let b = Fr::rand(rng);
-                let mut c = a;
-                c.mul_assign(&b);
-
-                let proof = create_random_proof(
-                    MySillyCircuit {
-                        a: Some(a),
-                        b: Some(b)
-                    },
-                    &params,
-                    rng
-                ).unwrap();
-
-                let mut v = vec![];
-                proof.write(&mut v).unwrap();
-
-                assert_eq!(v.len(), 192);
-
-                let de_proof = Proof::read(&v[..]).unwrap();
-                assert!(proof == de_proof);
-
-                assert!(verify_proof(&pvk, &proof, &[c]).unwrap());
-                assert!(!verify_proof(&pvk, &proof, &[a]).unwrap());
-
-}
-
-struct MySillyCircuit<E: Engine> {
-            a: Option<E::Fr>,
-            b: Option<E::Fr>
-}
-
-impl<E: Engine> Circuit<E> for MySillyCircuit<E> {
-            fn synthesize<CS: ConstraintSystem<E>>(
-                self,
-                cs: &mut CS
-            ) -> Result<(), SynthesisError>
-            {
-                let a = cs.alloc(|| "a", || self.a.ok_or(SynthesisError::AssignmentMissing))?;
-                let b = cs.alloc(|| "b", || self.b.ok_or(SynthesisError::AssignmentMissing))?;
-                let c = cs.alloc_input(|| "c", || {
-                    let mut a = self.a.ok_or(SynthesisError::AssignmentMissing)?;
-                    let b = self.b.ok_or(SynthesisError::AssignmentMissing)?;
-
-                    a.mul_assign(&b);
-                    Ok(a)
-                })?;
-
-                cs.enforce(
-                    || "a*b=c",
-                    |lc| lc + a,
-                    |lc| lc + b,
-                    |lc| lc + c
-                );
-
-                Ok(())
-            }
-        }
-
-
-#[no_mangle]
 pub extern "system" fn librustzcash_sapling_proving_ctx_init() -> *mut SaplingProvingContext {
     let ctx = Box::new(SaplingProvingContext {
         bsk: Fs::zero(),
@@ -1053,18 +905,6 @@ pub extern "system" fn librustzcash_sapling_verification_ctx_free(
     ctx: *mut SaplingVerificationContext,
 ) {
     drop(unsafe { Box::from_raw(ctx) });
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_initWallet(
-    env: JNIEnv<'_>,
-    _: JClass<'_>,
-    seed: jbyteArray,
-) {
-
-    let seed = env.convert_byte_array(seed).unwrap();
-
-    let xsk = ExtendedSpendingKey::master(&seed);
 }
 
 #[no_mangle]
@@ -1344,4 +1184,18 @@ pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_encryptOutgoing(
                     .seal_to(&mut output, &message, &[], &key, &[0u8; 12]);
 
     env.byte_array_from_slice(&output).expect("Could not convert u8 vec into java byte array!")
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_cmSeed(
+    env: JNIEnv<'_>,
+    _: JClass<'_>,
+    cm: jstring
+) -> jstring {
+
+    let scalar = Scalar::from_str(cm).unwrap();
+
+    let output = env.new_string(scalar).expect("Couldn't create java string!");
+
+    output.into_inner()
 }

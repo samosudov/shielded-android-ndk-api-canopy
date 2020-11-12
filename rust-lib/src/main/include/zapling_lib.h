@@ -16,6 +16,10 @@ void librustzcash_sapling_generate_r(
         unsigned char *result
 );
 
+void librustzcash_sapling_generate_rseed(
+        unsigned char *result
+);
+
 void librustzcash_init_zksnark_params(
         const char *output_bytes,
         const char* output_hash,
