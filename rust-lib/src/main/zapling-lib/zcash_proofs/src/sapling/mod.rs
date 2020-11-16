@@ -1,6 +1,7 @@
-use pairing::bls12_381::Bls12;
-use sapling_crypto::jubjub::{
-    edwards, fs::FsRepr, FixedGenerators, JubjubBls12, JubjubParams, Unknown,
+//! Helpers for creating Sapling proofs.
+
+use zcash_primitives::{
+    constants::VALUE_COMMITMENT_VALUE_GENERATOR, transaction::components::Amount,
 };
 
 mod prover;
@@ -10,13 +11,10 @@ pub use self::prover::SaplingProvingContext;
 pub use self::verifier::SaplingVerificationContext;
 
 // This function computes `value` in the exponent of the value commitment base
-pub fn compute_value_balance(
-    value: i64,
-    params: &JubjubBls12,
-) -> Option<edwards::Point<Bls12, Unknown>> {
+fn compute_value_balance(value: Amount) -> Option<jubjub::ExtendedPoint> {
     // Compute the absolute value (failing if -i64::MAX is
     // the value)
-    let abs = match value.checked_abs() {
+    let abs = match i64::from(value).checked_abs() {
         Some(a) => a as u64,
         None => return None,
     };
@@ -25,13 +23,11 @@ pub fn compute_value_balance(
     let is_negative = value.is_negative();
 
     // Compute it in the exponent
-    let mut value_balance = params
-        .generator(FixedGenerators::ValueCommitmentValue)
-        .mul(FsRepr::from(abs), params);
+    let mut value_balance = VALUE_COMMITMENT_VALUE_GENERATOR * jubjub::Fr::from(abs);
 
     // Negate if necessary
     if is_negative {
-        value_balance = value_balance.negate();
+        value_balance = -value_balance;
     }
 
     // Convert to unknown order point

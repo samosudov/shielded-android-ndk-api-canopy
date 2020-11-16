@@ -3,10 +3,10 @@ use std::io::{self, Read, Write};
 
 const MAX_SIZE: usize = 0x02000000;
 
-struct CompactSize;
+pub(crate) struct CompactSize;
 
 impl CompactSize {
-    fn read<R: Read>(mut reader: R) -> io::Result<usize> {
+    pub(crate) fn read<R: Read>(mut reader: R) -> io::Result<usize> {
         let flag = reader.read_u8()?;
         match if flag < 253 {
             Ok(flag as usize)
@@ -43,7 +43,7 @@ impl CompactSize {
         }
     }
 
-    fn write<W: Write>(mut writer: W, size: usize) -> io::Result<()> {
+    pub(crate) fn write<W: Write>(mut writer: W, size: usize) -> io::Result<()> {
         match size {
             s if s < 253 => writer.write_u8(s as u8),
             s if s <= 0xFFFF => {
@@ -70,7 +70,7 @@ impl Vector {
         F: Fn(&mut R) -> io::Result<E>,
     {
         let count = CompactSize::read(&mut reader)?;
-        (0..count).into_iter().map(|_| func(&mut reader)).collect()
+        (0..count).map(|_| func(&mut reader)).collect()
     }
 
     pub fn write<W: Write, E, F>(mut writer: W, vec: &[E], func: F) -> io::Result<()>
@@ -155,6 +155,7 @@ mod tests {
         }
     }
 
+    #[allow(clippy::useless_vec)]
     #[test]
     fn vector() {
         macro_rules! eval {
@@ -221,6 +222,7 @@ mod tests {
         eval_u8!(Some(1), [1, 1]);
         eval_u8!(Some(5), [1, 5]);
 
+        eval_vec!(None as Option<Vec<_>>, [0]);
         eval_vec!(Some(vec![]), [1, 0]);
         eval_vec!(Some(vec![0]), [1, 1, 0]);
         eval_vec!(Some(vec![1]), [1, 1, 1]);

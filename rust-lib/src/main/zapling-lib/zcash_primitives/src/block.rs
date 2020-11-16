@@ -1,30 +1,51 @@
+//! Structs and methods for handling Zcash block headers.
+
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use hex;
+use sha2::{Digest, Sha256};
 use std::fmt;
 use std::io::{self, Read, Write};
 use std::ops::Deref;
 
-use serialize::Vector;
+use crate::serialize::Vector;
+
+pub use equihash;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BlockHash(pub [u8; 32]);
 
 impl fmt::Display for BlockHash {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        let mut data = self.0.to_vec();
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut data = self.0;
         data.reverse();
         formatter.write_str(&hex::encode(data))
     }
 }
 
+impl BlockHash {
+    /// Constructs a [`BlockHash`] from the given slice.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the slice is not exactly 32 bytes.
+    pub fn from_slice(bytes: &[u8]) -> Self {
+        assert_eq!(bytes.len(), 32);
+        let mut hash = [0; 32];
+        hash.copy_from_slice(&bytes);
+        BlockHash(hash)
+    }
+}
+
 /// A Zcash block header.
-pub struct BlockHeader(BlockHeaderData);
+pub struct BlockHeader {
+    hash: BlockHash,
+    data: BlockHeaderData,
+}
 
 impl Deref for BlockHeader {
     type Target = BlockHeaderData;
 
     fn deref(&self) -> &BlockHeaderData {
-        &self.0
+        &self.data
     }
 }
 
@@ -40,12 +61,31 @@ pub struct BlockHeaderData {
 }
 
 impl BlockHeaderData {
-    pub fn freeze(self) -> BlockHeader {
-        BlockHeader(self)
+    pub fn freeze(self) -> io::Result<BlockHeader> {
+        BlockHeader::from_data(self)
     }
 }
 
 impl BlockHeader {
+    fn from_data(data: BlockHeaderData) -> io::Result<Self> {
+        let mut header = BlockHeader {
+            hash: BlockHash([0; 32]),
+            data,
+        };
+        let mut raw = vec![];
+        header.write(&mut raw)?;
+        header
+            .hash
+            .0
+            .copy_from_slice(&Sha256::digest(&Sha256::digest(&raw)));
+        Ok(header)
+    }
+
+    /// Returns the hash of this header.
+    pub fn hash(&self) -> BlockHash {
+        self.hash
+    }
+
     pub fn read<R: Read>(mut reader: R) -> io::Result<Self> {
         let version = reader.read_i32::<LittleEndian>()?;
 
@@ -66,7 +106,7 @@ impl BlockHeader {
 
         let solution = Vector::read(&mut reader, |r| r.read_u8())?;
 
-        Ok(BlockHeader(BlockHeaderData {
+        BlockHeader::from_data(BlockHeaderData {
             version,
             prev_block,
             merkle_root,
@@ -75,7 +115,7 @@ impl BlockHeader {
             bits,
             nonce,
             solution,
-        }))
+        })
     }
 
     pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
@@ -202,6 +242,10 @@ mod tests {
     #[test]
     fn header_read_write() {
         let header = BlockHeader::read(&HEADER_MAINNET_415000[..]).unwrap();
+        assert_eq!(
+            format!("{}", header.hash()),
+            "0000000001ab37793ce771262b2ffa082519aa3fe891250a1adb43baaf856168"
+        );
         let mut encoded = Vec::with_capacity(HEADER_MAINNET_415000.len());
         header.write(&mut encoded).unwrap();
         assert_eq!(&HEADER_MAINNET_415000[..], &encoded[..]);

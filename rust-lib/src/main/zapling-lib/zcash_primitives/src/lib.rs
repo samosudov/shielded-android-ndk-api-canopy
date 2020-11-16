@@ -1,29 +1,30 @@
-#[macro_use]
-extern crate lazy_static;
+//! *General Zcash primitives.*
+//!
+//! `zcash_primitives` is a library that provides the core structs and functions necessary
+//! for working with Zcash.
 
-extern crate blake2_rfc;
-extern crate byteorder;
-extern crate chacha20_poly1305_aead;
-extern crate ff;
-extern crate hex;
-extern crate pairing;
-extern crate rand;
-extern crate sapling_crypto;
-extern crate sha2;
-
-use sapling_crypto::jubjub::JubjubBls12;
+#![cfg_attr(docsrs, feature(doc_cfg))]
+// Catch documentation errors caused by code changes.
+#![deny(intra_doc_link_resolution_failure)]
 
 pub mod block;
+pub mod consensus;
+pub mod constants;
+pub mod extensions;
+pub mod group_hash;
 pub mod keys;
+pub mod legacy;
 pub mod merkle_tree;
 pub mod note_encryption;
+pub mod pedersen_hash;
+pub mod primitives;
+pub mod prover;
+pub mod redjubjub;
 pub mod sapling;
-mod serialize;
+pub mod serialize;
 pub mod transaction;
+pub mod util;
+pub mod zip32;
 
 #[cfg(test)]
 mod test_vectors;
-
-lazy_static! {
-    pub static ref JUBJUB: JubjubBls12 = { JubjubBls12::new() };
-}

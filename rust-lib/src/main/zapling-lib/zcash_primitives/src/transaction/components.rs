@@ -1,86 +1,42 @@
+//! Structs representing the components within Zcash transactions.
+
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use ff::{PrimeField, PrimeFieldRepr};
-use pairing::bls12_381::{Bls12, Fr, FrRepr};
-use sapling_crypto::{
-    jubjub::{edwards, Unknown},
-    redjubjub::{PublicKey, Signature},
-};
+
+use ff::PrimeField;
+use group::GroupEncoding;
+
+use std::convert::TryFrom;
 use std::io::{self, Read, Write};
 
-use serialize::Vector;
-use JUBJUB;
+use crate::extensions::transparent as tze;
+use crate::legacy::Script;
+use crate::redjubjub::{PublicKey, Signature};
+use crate::serialize::{CompactSize, Vector};
+
+pub mod amount;
+pub use self::amount::Amount;
 
 // π_A + π_B + π_C
-pub const GROTH_PROOF_SIZE: usize = (48 + 96 + 48);
+pub const GROTH_PROOF_SIZE: usize = 48 + 96 + 48;
 // π_A + π_A' + π_B + π_B' + π_C + π_C' + π_K + π_H
-const PHGR_PROOF_SIZE: usize = (33 + 33 + 65 + 33 + 33 + 33 + 33 + 33);
+const PHGR_PROOF_SIZE: usize = 33 + 33 + 65 + 33 + 33 + 33 + 33 + 33;
 
 const ZC_NUM_JS_INPUTS: usize = 2;
 const ZC_NUM_JS_OUTPUTS: usize = 2;
 
-const COIN: i64 = 1_0000_0000;
-const MAX_MONEY: i64 = 21_000_000 * COIN;
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Amount(pub i64);
-
-impl Amount {
-    // Read an Amount from a signed 64-bit little-endian integer.
-    pub fn read_i64<R: Read>(mut reader: R, allow_negative: bool) -> io::Result<Self> {
-        let amount = reader.read_i64::<LittleEndian>()?;
-        if 0 <= amount && amount <= MAX_MONEY {
-            Ok(Amount(amount))
-        } else if allow_negative && -MAX_MONEY <= amount && amount < 0 {
-            Ok(Amount(amount))
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                if allow_negative {
-                    "Amount not in {-MAX_MONEY..MAX_MONEY}"
-                } else {
-                    "Amount not in {0..MAX_MONEY}"
-                },
-            ))
-        }
-    }
-
-    // Read an Amount from an unsigned 64-bit little-endian integer.
-    pub fn read_u64<R: Read>(mut reader: R) -> io::Result<Self> {
-        let amount = reader.read_u64::<LittleEndian>()?;
-        if amount <= MAX_MONEY as u64 {
-            Ok(Amount(amount as i64))
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Amount not in {0..MAX_MONEY}",
-            ))
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Script(pub Vec<u8>);
-
-impl Script {
-    pub fn read<R: Read>(mut reader: R) -> io::Result<Self> {
-        let script = Vector::read(&mut reader, |r| r.read_u8())?;
-        Ok(Script(script))
-    }
-
-    pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
-        Vector::write(&mut writer, &self.0, |w, e| w.write_u8(*e))
-    }
-}
-
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct OutPoint {
     hash: [u8; 32],
     n: u32,
 }
 
 impl OutPoint {
+    pub fn new(hash: [u8; 32], n: u32) -> Self {
+        OutPoint { hash, n }
+    }
+
     pub fn read<R: Read>(mut reader: R) -> io::Result<Self> {
-        let mut hash = [0; 32];
+        let mut hash = [0u8; 32];
         reader.read_exact(&mut hash)?;
         let n = reader.read_u32::<LittleEndian>()?;
         Ok(OutPoint { hash, n })
@@ -90,16 +46,34 @@ impl OutPoint {
         writer.write_all(&self.hash)?;
         writer.write_u32::<LittleEndian>(self.n)
     }
+
+    pub fn n(&self) -> u32 {
+        self.n
+    }
+
+    pub fn hash(&self) -> &[u8; 32] {
+        &self.hash
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TxIn {
     pub prevout: OutPoint,
-    script_sig: Script,
+    pub script_sig: Script,
     pub sequence: u32,
 }
 
 impl TxIn {
+    #[cfg(feature = "transparent-inputs")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "transparent-inputs")))]
+    pub fn new(prevout: OutPoint) -> Self {
+        TxIn {
+            prevout,
+            script_sig: Script::default(),
+            sequence: std::u32::MAX,
+        }
+    }
+
     pub fn read<R: Read>(mut reader: &mut R) -> io::Result<Self> {
         let prevout = OutPoint::read(&mut reader)?;
         let script_sig = Script::read(&mut reader)?;
@@ -119,15 +93,20 @@ impl TxIn {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TxOut {
-    value: Amount,
-    script_pubkey: Script,
+    pub value: Amount,
+    pub script_pubkey: Script,
 }
 
 impl TxOut {
     pub fn read<R: Read>(mut reader: &mut R) -> io::Result<Self> {
-        let value = Amount::read_i64(&mut reader, false)?;
+        let value = {
+            let mut tmp = [0u8; 8];
+            reader.read_exact(&mut tmp)?;
+            Amount::from_nonnegative_i64_le_bytes(tmp)
+        }
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "value out of range"))?;
         let script_pubkey = Script::read(&mut reader)?;
 
         Ok(TxOut {
@@ -137,22 +116,145 @@ impl TxOut {
     }
 
     pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
-        writer.write_i64::<LittleEndian>(self.value.0)?;
+        writer.write_all(&self.value.to_i64_le_bytes())?;
         self.script_pubkey.write(&mut writer)
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct TzeIn {
+    pub prevout: OutPoint,
+    pub witness: tze::Witness,
+}
+
+fn to_io_error(_: std::num::TryFromIntError) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, "value out of range")
+}
+
+/// Transaction encoding and decoding functions conforming to ZIP-222
+///
+/// https://zips.z.cash/zip-0222#encoding-in-transactions
+impl TzeIn {
+    /// Convenience constructor
+    pub fn new(prevout: OutPoint, extension_id: u32, mode: u32) -> Self {
+        TzeIn {
+            prevout,
+            witness: tze::Witness {
+                extension_id,
+                mode,
+                payload: vec![],
+            },
+        }
+    }
+
+    /// Read witness metadata & payload
+    ///
+    /// Used to decode the encoded form used within a serialized
+    /// transaction.
+    pub fn read<R: Read>(mut reader: &mut R) -> io::Result<Self> {
+        let prevout = OutPoint::read(&mut reader)?;
+
+        let extension_id = CompactSize::read(&mut reader)?;
+        let mode = CompactSize::read(&mut reader)?;
+        let payload = Vector::read(&mut reader, |r| r.read_u8())?;
+
+        Ok(TzeIn {
+            prevout,
+            witness: tze::Witness {
+                extension_id: u32::try_from(extension_id).map_err(to_io_error)?,
+                mode: u32::try_from(mode).map_err(to_io_error)?,
+                payload,
+            },
+        })
+    }
+
+    /// Write without witness data (for signature hashing)
+    ///
+    /// This is also used as the prefix for the encoded form used
+    /// within a serialized transaction.
+    pub fn write_without_witness<W: Write>(&self, mut writer: W) -> io::Result<()> {
+        self.prevout.write(&mut writer)?;
+
+        CompactSize::write(
+            &mut writer,
+            usize::try_from(self.witness.extension_id).map_err(to_io_error)?,
+        )?;
+
+        CompactSize::write(
+            &mut writer,
+            usize::try_from(self.witness.mode).map_err(to_io_error)?,
+        )
+    }
+
+    /// Write prevout, extension, and mode followed by witness data.
+    ///
+    /// This calls [`write_without_witness`] to serialize witness metadata,
+    /// then appends the witness bytes themselves. This is the encoded
+    /// form that is used in a serialized transaction.
+    pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
+        self.write_without_witness(&mut writer)?;
+        Vector::write(&mut writer, &self.witness.payload, |w, b| w.write_u8(*b))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TzeOut {
+    pub value: Amount,
+    pub precondition: tze::Precondition,
+}
+
+impl TzeOut {
+    pub fn read<R: Read>(mut reader: &mut R) -> io::Result<Self> {
+        let value = {
+            let mut tmp = [0; 8];
+            reader.read_exact(&mut tmp)?;
+            Amount::from_nonnegative_i64_le_bytes(tmp)
+        }
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "value out of range"))?;
+
+        let extension_id = CompactSize::read(&mut reader)?;
+        let mode = CompactSize::read(&mut reader)?;
+        let payload = Vector::read(&mut reader, |r| r.read_u8())?;
+
+        Ok(TzeOut {
+            value,
+            precondition: tze::Precondition {
+                extension_id: u32::try_from(extension_id).map_err(to_io_error)?,
+                mode: u32::try_from(mode).map_err(to_io_error)?,
+                payload,
+            },
+        })
+    }
+
+    pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
+        writer.write_all(&self.value.to_i64_le_bytes())?;
+
+        CompactSize::write(
+            &mut writer,
+            usize::try_from(self.precondition.extension_id).map_err(to_io_error)?,
+        )?;
+        CompactSize::write(
+            &mut writer,
+            usize::try_from(self.precondition.mode).map_err(to_io_error)?,
+        )?;
+        Vector::write(&mut writer, &self.precondition.payload, |w, b| {
+            w.write_u8(*b)
+        })
+    }
+}
+
+#[derive(Clone)]
 pub struct SpendDescription {
-    pub cv: edwards::Point<Bls12, Unknown>,
-    pub anchor: Fr,
+    pub cv: jubjub::ExtendedPoint,
+    pub anchor: bls12_381::Scalar,
     pub nullifier: [u8; 32],
-    pub rk: PublicKey<Bls12>,
+    pub rk: PublicKey,
     pub zkproof: [u8; GROTH_PROOF_SIZE],
     pub spend_auth_sig: Option<Signature>,
 }
 
 impl std::fmt::Debug for SpendDescription {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
             "SpendDescription(cv = {:?}, anchor = {:?}, nullifier = {:?}, rk = {:?}, spend_auth_sig = {:?})",
@@ -167,28 +269,37 @@ impl SpendDescription {
         // - Canonical encoding is enforced here.
         // - "Not small order" is enforced in SaplingVerificationContext::check_spend()
         //   (located in zcash_proofs::sapling::verifier).
-        let cv = edwards::Point::<Bls12, Unknown>::read(&mut reader, &JUBJUB)?;
+        let cv = {
+            let mut bytes = [0u8; 32];
+            reader.read_exact(&mut bytes)?;
+            let cv = jubjub::ExtendedPoint::from_bytes(&bytes);
+            if cv.is_none().into() {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid cv"));
+            }
+            cv.unwrap()
+        };
 
         // Consensus rule (§7.3): Canonical encoding is enforced here
         let anchor = {
-            let mut f = FrRepr::default();
-            f.read_le(&mut reader)?;
-            Fr::from_repr(f).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?
+            let mut f = [0u8; 32];
+            reader.read_exact(&mut f)?;
+            bls12_381::Scalar::from_repr(f)
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "anchor not in field"))?
         };
 
-        let mut nullifier = [0; 32];
+        let mut nullifier = [0u8; 32];
         reader.read_exact(&mut nullifier)?;
 
         // Consensus rules (§4.4):
         // - Canonical encoding is enforced here.
         // - "Not small order" is enforced in SaplingVerificationContext::check_spend()
-        let rk = PublicKey::<Bls12>::read(&mut reader, &JUBJUB)?;
+        let rk = PublicKey::read(&mut reader)?;
 
         // Consensus rules (§4.4):
         // - Canonical encoding is enforced by the API of SaplingVerificationContext::check_spend()
         //   due to the need to parse this into a bellman::groth16::Proof.
         // - Proof validity is enforced in SaplingVerificationContext::check_spend()
-        let mut zkproof = [0; GROTH_PROOF_SIZE];
+        let mut zkproof = [0u8; GROTH_PROOF_SIZE];
         reader.read_exact(&mut zkproof)?;
 
         // Consensus rules (§4.4):
@@ -207,34 +318,33 @@ impl SpendDescription {
     }
 
     pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
-        self.cv.write(&mut writer)?;
-        self.anchor.into_repr().write_le(&mut writer)?;
+        writer.write_all(&self.cv.to_bytes())?;
+        writer.write_all(self.anchor.to_repr().as_ref())?;
         writer.write_all(&self.nullifier)?;
         self.rk.write(&mut writer)?;
         writer.write_all(&self.zkproof)?;
         match self.spend_auth_sig {
             Some(sig) => sig.write(&mut writer),
-            None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "Missing spend auth signature",
-                ))
-            }
+            None => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Missing spend auth signature",
+            )),
         }
     }
 }
 
+#[derive(Clone)]
 pub struct OutputDescription {
-    pub cv: edwards::Point<Bls12, Unknown>,
-    pub cmu: Fr,
-    pub ephemeral_key: edwards::Point<Bls12, Unknown>,
+    pub cv: jubjub::ExtendedPoint,
+    pub cmu: bls12_381::Scalar,
+    pub ephemeral_key: jubjub::ExtendedPoint,
     pub enc_ciphertext: [u8; 580],
     pub out_ciphertext: [u8; 80],
     pub zkproof: [u8; GROTH_PROOF_SIZE],
 }
 
 impl std::fmt::Debug for OutputDescription {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
             "OutputDescription(cv = {:?}, cmu = {:?}, ephemeral_key = {:?})",
@@ -244,27 +354,47 @@ impl std::fmt::Debug for OutputDescription {
 }
 
 impl OutputDescription {
-    pub fn read<R: Read>(mut reader: &mut R) -> io::Result<Self> {
+    pub fn read<R: Read>(reader: &mut R) -> io::Result<Self> {
         // Consensus rules (§4.5):
         // - Canonical encoding is enforced here.
         // - "Not small order" is enforced in SaplingVerificationContext::check_output()
         //   (located in zcash_proofs::sapling::verifier).
-        let cv = edwards::Point::<Bls12, Unknown>::read(&mut reader, &JUBJUB)?;
+        let cv = {
+            let mut bytes = [0u8; 32];
+            reader.read_exact(&mut bytes)?;
+            let cv = jubjub::ExtendedPoint::from_bytes(&bytes);
+            if cv.is_none().into() {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid cv"));
+            }
+            cv.unwrap()
+        };
 
         // Consensus rule (§7.4): Canonical encoding is enforced here
         let cmu = {
-            let mut f = FrRepr::default();
-            f.read_le(&mut reader)?;
-            Fr::from_repr(f).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?
+            let mut f = [0u8; 32];
+            reader.read_exact(&mut f)?;
+            bls12_381::Scalar::from_repr(f)
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "cmu not in field"))?
         };
 
         // Consensus rules (§4.5):
         // - Canonical encoding is enforced here.
         // - "Not small order" is enforced in SaplingVerificationContext::check_output()
-        let ephemeral_key = edwards::Point::<Bls12, Unknown>::read(&mut reader, &JUBJUB)?;
+        let ephemeral_key = {
+            let mut bytes = [0u8; 32];
+            reader.read_exact(&mut bytes)?;
+            let ephemeral_key = jubjub::ExtendedPoint::from_bytes(&bytes);
+            if ephemeral_key.is_none().into() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "invalid ephemeral_key",
+                ));
+            }
+            ephemeral_key.unwrap()
+        };
 
-        let mut enc_ciphertext = [0; 580];
-        let mut out_ciphertext = [0; 80];
+        let mut enc_ciphertext = [0u8; 580];
+        let mut out_ciphertext = [0u8; 80];
         reader.read_exact(&mut enc_ciphertext)?;
         reader.read_exact(&mut out_ciphertext)?;
 
@@ -272,7 +402,7 @@ impl OutputDescription {
         // - Canonical encoding is enforced by the API of SaplingVerificationContext::check_output()
         //   due to the need to parse this into a bellman::groth16::Proof.
         // - Proof validity is enforced in SaplingVerificationContext::check_output()
-        let mut zkproof = [0; GROTH_PROOF_SIZE];
+        let mut zkproof = [0u8; GROTH_PROOF_SIZE];
         reader.read_exact(&mut zkproof)?;
 
         Ok(OutputDescription {
@@ -286,22 +416,23 @@ impl OutputDescription {
     }
 
     pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
-        self.cv.write(&mut writer)?;
-        self.cmu.into_repr().write_le(&mut writer)?;
-        self.ephemeral_key.write(&mut writer)?;
+        writer.write_all(&self.cv.to_bytes())?;
+        writer.write_all(self.cmu.to_repr().as_ref())?;
+        writer.write_all(&self.ephemeral_key.to_bytes())?;
         writer.write_all(&self.enc_ciphertext)?;
         writer.write_all(&self.out_ciphertext)?;
         writer.write_all(&self.zkproof)
     }
 }
 
+#[derive(Clone)]
 enum SproutProof {
     Groth([u8; GROTH_PROOF_SIZE]),
     PHGR([u8; PHGR_PROOF_SIZE]),
 }
 
 impl std::fmt::Debug for SproutProof {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             SproutProof::Groth(_) => write!(f, "SproutProof::Groth"),
             SproutProof::PHGR(_) => write!(f, "SproutProof::PHGR"),
@@ -309,6 +440,7 @@ impl std::fmt::Debug for SproutProof {
     }
 }
 
+#[derive(Clone)]
 pub struct JSDescription {
     vpub_old: Amount,
     vpub_new: Amount,
@@ -323,7 +455,7 @@ pub struct JSDescription {
 }
 
 impl std::fmt::Debug for JSDescription {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
             "JSDescription(
@@ -349,24 +481,34 @@ impl std::fmt::Debug for JSDescription {
 impl JSDescription {
     pub fn read<R: Read>(mut reader: R, use_groth: bool) -> io::Result<Self> {
         // Consensus rule (§4.3): Canonical encoding is enforced here
-        let vpub_old = Amount::read_u64(&mut reader)?;
+        let vpub_old = {
+            let mut tmp = [0u8; 8];
+            reader.read_exact(&mut tmp)?;
+            Amount::from_u64_le_bytes(tmp)
+        }
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "vpub_old out of range"))?;
 
         // Consensus rule (§4.3): Canonical encoding is enforced here
-        let vpub_new = Amount::read_u64(&mut reader)?;
+        let vpub_new = {
+            let mut tmp = [0u8; 8];
+            reader.read_exact(&mut tmp)?;
+            Amount::from_u64_le_bytes(tmp)
+        }
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "vpub_new out of range"))?;
 
         // Consensus rule (§4.3): One of vpub_old and vpub_new being zero is
         // enforced by CheckTransactionWithoutProofVerification() in zcashd.
 
-        let mut anchor = [0; 32];
+        let mut anchor = [0u8; 32];
         reader.read_exact(&mut anchor)?;
 
-        let mut nullifiers = [[0; 32]; ZC_NUM_JS_INPUTS];
+        let mut nullifiers = [[0u8; 32]; ZC_NUM_JS_INPUTS];
         nullifiers
             .iter_mut()
             .map(|nf| reader.read_exact(nf))
             .collect::<io::Result<()>>()?;
 
-        let mut commitments = [[0; 32]; ZC_NUM_JS_OUTPUTS];
+        let mut commitments = [[0u8; 32]; ZC_NUM_JS_OUTPUTS];
         commitments
             .iter_mut()
             .map(|cm| reader.read_exact(cm))
@@ -374,37 +516,34 @@ impl JSDescription {
 
         // Consensus rule (§4.3): Canonical encoding is enforced by
         // ZCNoteDecryption::decrypt() in zcashd
-        let mut ephemeral_key = [0; 32];
+        let mut ephemeral_key = [0u8; 32];
         reader.read_exact(&mut ephemeral_key)?;
 
-        let mut random_seed = [0; 32];
+        let mut random_seed = [0u8; 32];
         reader.read_exact(&mut random_seed)?;
 
-        let mut macs = [[0; 32]; ZC_NUM_JS_INPUTS];
+        let mut macs = [[0u8; 32]; ZC_NUM_JS_INPUTS];
         macs.iter_mut()
             .map(|mac| reader.read_exact(mac))
             .collect::<io::Result<()>>()?;
 
-        let proof = match use_groth {
-            true => {
-                // Consensus rules (§4.3):
-                // - Canonical encoding is enforced in librustzcash_sprout_verify()
-                // - Proof validity is enforced in librustzcash_sprout_verify()
-                let mut proof = [0; GROTH_PROOF_SIZE];
-                reader.read_exact(&mut proof)?;
-                SproutProof::Groth(proof)
-            }
-            false => {
-                // Consensus rules (§4.3):
-                // - Canonical encoding is enforced by PHGRProof in zcashd
-                // - Proof validity is enforced by JSDescription::Verify() in zcashd
-                let mut proof = [0; PHGR_PROOF_SIZE];
-                reader.read_exact(&mut proof)?;
-                SproutProof::PHGR(proof)
-            }
+        let proof = if use_groth {
+            // Consensus rules (§4.3):
+            // - Canonical encoding is enforced in librustzcash_sprout_verify()
+            // - Proof validity is enforced in librustzcash_sprout_verify()
+            let mut proof = [0u8; GROTH_PROOF_SIZE];
+            reader.read_exact(&mut proof)?;
+            SproutProof::Groth(proof)
+        } else {
+            // Consensus rules (§4.3):
+            // - Canonical encoding is enforced by PHGRProof in zcashd
+            // - Proof validity is enforced by JSDescription::Verify() in zcashd
+            let mut proof = [0u8; PHGR_PROOF_SIZE];
+            reader.read_exact(&mut proof)?;
+            SproutProof::PHGR(proof)
         };
 
-        let mut ciphertexts = [[0; 601]; ZC_NUM_JS_OUTPUTS];
+        let mut ciphertexts = [[0u8; 601]; ZC_NUM_JS_OUTPUTS];
         ciphertexts
             .iter_mut()
             .map(|ct| reader.read_exact(ct))
@@ -425,8 +564,8 @@ impl JSDescription {
     }
 
     pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
-        writer.write_i64::<LittleEndian>(self.vpub_old.0)?;
-        writer.write_i64::<LittleEndian>(self.vpub_new.0)?;
+        writer.write_all(&self.vpub_old.to_i64_le_bytes())?;
+        writer.write_all(&self.vpub_new.to_i64_le_bytes())?;
         writer.write_all(&self.anchor)?;
         writer.write_all(&self.nullifiers[0])?;
         writer.write_all(&self.nullifiers[1])?;
@@ -444,52 +583,5 @@ impl JSDescription {
 
         writer.write_all(&self.ciphertexts[0])?;
         writer.write_all(&self.ciphertexts[1])
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Amount, MAX_MONEY};
-
-    #[test]
-    fn amount_in_range() {
-        let zero = b"\x00\x00\x00\x00\x00\x00\x00\x00";
-        assert_eq!(Amount::read_u64(&zero[..]).unwrap(), Amount(0));
-        assert_eq!(Amount::read_i64(&zero[..], false).unwrap(), Amount(0));
-        assert_eq!(Amount::read_i64(&zero[..], true).unwrap(), Amount(0));
-
-        let neg_one = b"\xff\xff\xff\xff\xff\xff\xff\xff";
-        assert!(Amount::read_u64(&neg_one[..]).is_err());
-        assert!(Amount::read_i64(&neg_one[..], false).is_err());
-        assert_eq!(Amount::read_i64(&neg_one[..], true).unwrap(), Amount(-1));
-
-        let max_money = b"\x00\x40\x07\x5a\xf0\x75\x07\x00";
-        assert_eq!(Amount::read_u64(&max_money[..]).unwrap(), Amount(MAX_MONEY));
-        assert_eq!(
-            Amount::read_i64(&max_money[..], false).unwrap(),
-            Amount(MAX_MONEY)
-        );
-        assert_eq!(
-            Amount::read_i64(&max_money[..], true).unwrap(),
-            Amount(MAX_MONEY)
-        );
-
-        let max_money_p1 = b"\x01\x40\x07\x5a\xf0\x75\x07\x00";
-        assert!(Amount::read_u64(&max_money_p1[..]).is_err());
-        assert!(Amount::read_i64(&max_money_p1[..], false).is_err());
-        assert!(Amount::read_i64(&max_money_p1[..], true).is_err());
-
-        let neg_max_money = b"\x00\xc0\xf8\xa5\x0f\x8a\xf8\xff";
-        assert!(Amount::read_u64(&neg_max_money[..]).is_err());
-        assert!(Amount::read_i64(&neg_max_money[..], false).is_err());
-        assert_eq!(
-            Amount::read_i64(&neg_max_money[..], true).unwrap(),
-            Amount(-MAX_MONEY)
-        );
-
-        let neg_max_money_m1 = b"\xff\xbf\xf8\xa5\x0f\x8a\xf8\xff";
-        assert!(Amount::read_u64(&neg_max_money_m1[..]).is_err());
-        assert!(Amount::read_i64(&neg_max_money_m1[..], false).is_err());
-        assert!(Amount::read_i64(&neg_max_money_m1[..], true).is_err());
     }
 }
