@@ -40,8 +40,6 @@ public class RustAPI {
 
     public static native String genr();
 
-    public static native String genRseed();
-
     public static native String epk(final String d,
                                     final String esk);
 
@@ -58,6 +56,11 @@ public class RustAPI {
 
     public static native String ivkToPdk(final String ivk,
                                          final String d);
+
+    public static native String checkout(final String cv,
+                                         final String cm,
+                                         final String ephemeralKey,
+                                         final String zkproof);
 
     public static native String merkelHash(final int depth,
                                            final String l,
@@ -85,6 +88,10 @@ public class RustAPI {
                                            final boolean[][] authPathsArr,
                                            final boolean[] indexesArr);
 
+    public static native byte toByteMerklePath(final byte pathByte,
+                                                 final boolean authPathBool,
+                                                 final int p);
+
     public static native byte[] vectorToInt(final boolean[][] authPathsArr,
                                             final boolean[] indexesArr);
 
@@ -96,7 +103,12 @@ public class RustAPI {
                                            final String sigHash,
                                            final String bsigHash);
 
+    public static native String testUint256(final String str);
+
+    public static native byte[] testToArr(final String str);
+
     //WALLET
+    public static native void initWallet(final byte[] data);
     public static native byte[] dPart(final byte[] data);
     public static native String zAddrFromWif(final byte[] data);
     public static native String getExtsk(final byte[] data);
@@ -115,7 +127,6 @@ public class RustAPI {
                                            final byte[] epk);
     public static native byte[] encryptOutgoing(final byte[] key,
                                        final byte[] message);
-    public static native String cmSeed(final String cm);
 
     //endregion
 

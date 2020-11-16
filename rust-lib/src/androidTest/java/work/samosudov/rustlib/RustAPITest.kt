@@ -1,9 +1,6 @@
 package work.samosudov.rustlib
 
 import androidx.test.core.app.ApplicationProvider
-import org.hamcrest.CoreMatchers.`is`
-import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertThat
 import org.junit.Before
 import org.junit.Test
 import work.samosudov.rustlib.crypto.Utils.hexToBytes
@@ -67,38 +64,6 @@ class RustAPITest {
 
         println("res=${Arrays.toString(res)}")
         assert(res.contentEquals(expected))
-    }
-
-    @Test
-    fun testGenR() {
-        val rGenResultFirst = RustAPI.genr()
-        val rGenResultSecond = RustAPI.genr()
-
-        println("rGenResultFirst=$rGenResultFirst")
-        println("rGenResultSecond=$rGenResultSecond")
-        assertThat(rGenResultFirst.length, `is`(64))
-        assertThat(rGenResultSecond.length, `is`(64))
-        assertNotEquals(rGenResultFirst, rGenResultSecond)
-    }
-
-    @Test
-    fun testGenRseed() {
-        val rSeedGenResultFirst = RustAPI.genRseed()
-        val rSeedGenResultSecond = RustAPI.genRseed()
-
-        println("rSeedGenResultFirst=$rSeedGenResultFirst")
-        println("rSeedGenResultSecond=$rSeedGenResultSecond")
-        assertThat(rSeedGenResultFirst.length, `is`(64))
-        assertThat(rSeedGenResultSecond.length, `is`(64))
-        assertNotEquals(rSeedGenResultFirst, rSeedGenResultSecond)
-    }
-
-    @Test
-    fun testCmSeed() {
-        val cm = "28161926966428986673895580777285905189725480206811328272001879986576840909576"
-        val cmSeedResult = RustAPI.cmSeed(cm)
-
-        println("cmSeedResult=$cmSeedResult")
     }
 
 }
