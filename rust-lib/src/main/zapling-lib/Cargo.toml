@@ -6,13 +6,7 @@ version = "0.1.0"
 crate-type = ["staticlib"]
 
 [dependencies]
-equihash = { path = "components/equihash" }
-zcash_client_backend = { path = "zcash_client_backend" }
-#zcash_client_sqlite = { path = "zcash_client_sqlite" }
-zcash_extensions = { path = "zcash_extensions" }
-zcash_history = { path = "zcash_history" }
 zcash_primitives = { path = "zcash_primitives" }
-zcash_proofs = { path = "zcash_proofs" }
 
 jni = { version = "0.10", default-features = false }
 libc = "0.2"

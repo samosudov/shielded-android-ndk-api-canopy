@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 JNIEXPORT jstring JNICALL
-Java_work_samosudov_rustlib_RustAPI_genr(
+Java_work_samosudov_rustlib_ZecLibRustApi_genr(
         JNIEnv *env,
         jobject /* this */) {
     uint256 r;
@@ -38,7 +38,7 @@ Java_work_samosudov_rustlib_RustAPI_genr(
 }
 
 JNIEXPORT jstring JNICALL
-Java_work_samosudov_rustlib_RustAPI_testUint256(
+Java_work_samosudov_rustlib_ZecLibRustApi_testUint256(
         JNIEnv *env,
         jobject,
         jstring str) {

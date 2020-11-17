@@ -8,22 +8,18 @@ extern crate ff;
 extern crate group;
 extern crate rand_core;
 extern crate jubjub;
-extern crate zcash_client_backend;
-// extern crate zcash_client_sqlite;
-extern crate zcash_extensions;
-extern crate zcash_history;
 extern crate zcash_primitives;
-extern crate zcash_proofs;
 
-use zcash_primitives::consensus::{self, BlockHeight, NetworkUpgrade::Canopy, ZIP212_GRACE_PERIOD};
-use zcash_primitives::primitives::{Diversifier, Note, PaymentAddress, Rseed};
+use zcash_primitives::consensus::{self, BlockHeight, NetworkUpgrade::Canopy, ZIP212_GRACE_PERIOD, TEST_NETWORK};
+use zcash_primitives::primitives::{Diversifier, Note, PaymentAddress, Rseed, ValueCommitment};
+use zcash_primitives::util::generate_random_rseed;
 
 use blake2b_simd::{Hash as Blake2bHash, Params as Blake2bParams};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crypto_api_chachapoly::{ChaCha20Ietf, ChachaPolyIetf};
 use ff::PrimeField;
 use group::{cofactor::CofactorGroup, GroupEncoding};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::{CryptoRng, RngCore, OsRng};
 use std::convert::TryInto;
 use std::fmt;
 use std::str;
@@ -38,7 +34,7 @@ use jni::{
     sys::{jboolean, jbyteArray, jint, jlong, jobjectArray, jstring, JNI_FALSE, JNI_TRUE},
     JNIEnv,
 };
-use rand::{OsRng, Rand, Rng, SeedableRng, XorShiftRng, thread_rng};
+use rand::{Rand, Rng, SeedableRng, XorShiftRng, thread_rng};
 
 const COMPACT_NOTE_SIZE: usize = 1 + // version
     11 + // diversifier
@@ -49,18 +45,15 @@ const COMPACT_NOTE_SIZE: usize = 1 + // version
 #[no_mangle]
 pub extern "system" fn librustzcash_sapling_generate_r(result: *mut [c_uchar; 32]) {
     // create random 64 byte buffer
-    let mut rng = OsRng::new().expect("should be able to construct RNG");
+    let mut rng = OsRng;
     let mut buffer = [0u8; 32];
 
     let result = unsafe { &mut *result };
-    for i in 0..result.len() {
-        result[i] = rng.gen();
-    }
 
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_encryptNp(
+pub unsafe extern "C" fn Java_work_samosudov_rustlib_ZecLibRustApi_encryptNp(
     env: JNIEnv<'_>,
     _: JClass<'_>,
     key: jbyteArray,
@@ -79,7 +72,7 @@ pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_encryptNp(
 
 /// Compute Sapling note commitment.
 #[no_mangle]
-pub unsafe extern "C" fn Java_work_samosudov_rustlib_RustAPI_cmRseed(
+pub unsafe extern "C" fn Java_work_samosudov_rustlib_ZecLibRustApi_cmRseed(
     env: JNIEnv<'_>,
     _: JClass<'_>,
     ivk: jbyteArray,

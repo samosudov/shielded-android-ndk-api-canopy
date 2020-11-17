@@ -14,7 +14,7 @@ import work.samosudov.rustlib.crypto.BitcoinCashBitArrayConverter;
 
 import static work.samosudov.rustlib.crypto.Utils.bytesToHex;
 
-public class RustAPI {
+public class ZecLibRustApi {
 
     public static void init(Context context) {
         ReLinker.Logger logcatLogger = new ReLinker.Logger() {
