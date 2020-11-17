@@ -1,2 +1,2 @@
-include ':app', ':rust-lib'
-rootProject.name='shielded-android-ndk-api'
+include ':app', ':zec-rust-lib'
+rootProject.name='shielded-android-ndk-api-canopy'
