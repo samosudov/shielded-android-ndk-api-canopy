@@ -31,6 +31,9 @@ public class RustAPI {
     public static native String encryptNp(final byte[] key,
                                           final byte[] cipher);
 
+    public static native byte[] cmRseed(final byte[] ivk,
+                                          final byte[] plaintext);
+
     //endregion
 
     private final static String RUST_INDEPENDENT_TAG = "rust-independent";

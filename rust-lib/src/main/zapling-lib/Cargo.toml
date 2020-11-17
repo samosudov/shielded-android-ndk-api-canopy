@@ -6,17 +6,21 @@ version = "0.1.0"
 crate-type = ["staticlib"]
 
 [dependencies]
+equihash = { path = "components/equihash" }
+zcash_client_backend = { path = "zcash_client_backend" }
+#zcash_client_sqlite = { path = "zcash_client_sqlite" }
+zcash_extensions = { path = "zcash_extensions" }
+zcash_history = { path = "zcash_history" }
+zcash_primitives = { path = "zcash_primitives" }
+zcash_proofs = { path = "zcash_proofs" }
+
 jni = { version = "0.10", default-features = false }
 libc = "0.2"
 rand = "0.4"
-
-[workspace]
-members = [
-    "components/equihash",
-    "zcash_client_backend",
-    "zcash_client_sqlite",
-    "zcash_extensions",
-    "zcash_history",
-    "zcash_primitives",
-    "zcash_proofs",
-]
+blake2b_simd = "0.5"
+byteorder = "1"
+crypto_api_chachapoly = "0.4"
+ff = "0.8"
+group = "0.8"
+rand_core = "0.5.1"
+jubjub = "0.5.1"
