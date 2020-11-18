@@ -22,6 +22,10 @@ Build:
 Add generated .aar file as module.
 rust-lib/build/outputs/aar/rust-lib-release.aar
 
+Using ZecLibRustApi methods:
+ZecLibRustApi must be initialized by method
+ZecLibRustApi.init(getApplicationContext());
+
 Issues:
 1.
 
