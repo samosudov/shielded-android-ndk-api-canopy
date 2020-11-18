@@ -71,4 +71,25 @@ class ZecLibRustApiTest {
         assertEquals(nfExpected, nfFromLibRevertedHex)
     }
 
+    @Test
+    fun testComputeNfSecond() {
+        val ivkBytes = byteArrayOf(66, 84, 49, 126, 45, 121, -50, 7, -99, -68, -89, -120, 58, -115, -40, -32, -40, 41, -44, -23, 88, -57, 10, 14, 94, -74, 110, 53, -98, 100, 5, 3)
+        val plainTextBytes = byteArrayOf(2, -86, 3, -15, 91, -14, 88, 9, -68, -104, -71, 63, 0, -31, -11, 5, 0, 0, 0, 0, -127, 104, 110, -59, -98, -71, 94, -108, 72, -128, -69, 90, -50, -33, 92, -5, -76, 60, 54, -124, -1, -112, 12, -109, 123, -92, 65, -34, -22, 39, 48, -67)
+        val akBytes = byteArrayOf(94, -87, 11, 17, -110, -116, -119, 69, 75, -31, -73, 97, -22, -76, 18, 87, 20, -33, 16, 45, 3, -115, 4, -34, 115, 21, 116, -73, 83, -78, -107, 57)
+        val nkBytes = byteArrayOf(91, -37, 86, -113, 0, 74, 59, -119, -111, 27, -57, 100, -76, 8, -121, -9, -47, -13, -65, -118, -115, -53, -102, 106, -93, -3, -118, -62, -78, -98, -28, -93)
+        val position = 103677
+
+        val resBytes = ZecLibRustApi.nullifier(
+            (ivkBytes),
+            (plainTextBytes),
+            (akBytes),
+            (nkBytes),
+            position
+        )
+        println("res1 = ${Arrays.toString(resBytes)}")
+        val nfFromLibRevertedHex = bytesToHex(resBytes)
+        println("res1 hex = $nfFromLibRevertedHex")
+    }
+
+
 }
