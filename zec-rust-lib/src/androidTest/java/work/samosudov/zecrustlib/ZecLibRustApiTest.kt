@@ -4,6 +4,7 @@ import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import work.samosudov.zecrustlib.crypto.Utils
 import work.samosudov.zecrustlib.crypto.Utils.*
 import java.util.*
 
@@ -47,6 +48,27 @@ class ZecLibRustApiTest {
         println("res1 hex reverted = $cmuFromLibRevertedHex")
 
         assertEquals(cmuExpected, cmuFromLibRevertedHex)
+    }
+
+    @Test
+    fun testComputeNf() {
+        val nfExpected = "1a36d31edce5bdf026aa8d111ff2c394a789264ba64a0dd326b1b084cf2e9c01"
+
+        val ak = "3995b253b7741573de048d032d10df145712b4ea61b7e14b45898c92110ba95e"
+        val nk = "a3e49eb2c28afda36a9acb8d8abff3d1f78708b464c71b91893b4a008f56db5b"
+        val position = 103677
+        val resBytes = ZecLibRustApi.nullifier(
+            reverseByteArray(ivkSecond),
+            (plainTextSecond),
+            reverseByteArray(hexToBytes(ak)),
+            reverseByteArray(hexToBytes(nk)),
+            position
+        )
+        println("res1 = ${Arrays.toString(resBytes)}")
+        val nfFromLibRevertedHex = bytesToHex(resBytes)
+        println("res1 hex = $nfFromLibRevertedHex")
+
+        assertEquals(nfExpected, nfFromLibRevertedHex)
     }
 
 }

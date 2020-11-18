@@ -34,6 +34,13 @@ public class ZecLibRustApi {
     public static native byte[] cmRseed(final byte[] ivk,
                                           final byte[] plaintext);
 
+    public static native byte[] nullifier(final byte[] ivk,
+                                          final byte[] plaintext,
+                                          final byte[] ak,
+                                          final byte[] nk,
+                                          final int position
+    );
+
     //endregion
 
     private final static String RUST_INDEPENDENT_TAG = "rust-independent";
