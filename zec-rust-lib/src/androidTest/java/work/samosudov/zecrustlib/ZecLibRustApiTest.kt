@@ -91,5 +91,22 @@ class ZecLibRustApiTest {
         println("res1 hex = $nfFromLibRevertedHex")
     }
 
+    @Test
+    fun testConvertRseed() {
+        val rcmBytes = byteArrayOf(94, -87, 11, 17, -110, -116, -119, 69, 75, -31, -73, 97, -22, -76, 18, 87, 20, -33, 16, 45, 3, -115, 4, -34, 115, 21, 116, -73, 83, -78, -107, 57)
+
+        val resBytes = ZecLibRustApi.convertRseed(rcmBytes)
+        println("res1 = ${Arrays.toString(resBytes)}")
+        println("res1 hex = ${bytesToHex(resBytes)}")
+    }
+
+    @Test
+    fun testConvertEsk() {
+        val eskBytes = byteArrayOf(94, -87, 11, 17, -110, -116, -119, 69, 75, -31, -73, 97, -22, -76, 18, 87, 20, -33, 16, 45, 3, -115, 4, -34, 115, 21, 116, -73, 83, -78, -107, 57)
+
+        val resBytes = ZecLibRustApi.convertEsk(eskBytes)
+        println("res1 = ${Arrays.toString(resBytes)}")
+        println("res1 hex = ${bytesToHex(resBytes)}")
+    }
 
 }

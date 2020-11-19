@@ -38,8 +38,11 @@ public class ZecLibRustApi {
                                           final byte[] plaintext,
                                           final byte[] ak,
                                           final byte[] nk,
-                                          final int position
-    );
+                                          final int position);
+
+    public static native byte[] convertRseed(final byte[] rcm);
+    public static native byte[] convertEsk(final byte[] esk);
+
 
     //endregion
 

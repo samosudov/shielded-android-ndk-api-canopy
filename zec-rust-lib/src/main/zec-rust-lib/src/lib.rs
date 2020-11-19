@@ -13,6 +13,7 @@ extern crate zcash_primitives;
 use zcash_primitives::consensus::{self, BlockHeight, NetworkUpgrade::Canopy, ZIP212_GRACE_PERIOD, TEST_NETWORK};
 use zcash_primitives::primitives::{Diversifier, Note, PaymentAddress, Rseed, ValueCommitment, ViewingKey};
 use zcash_primitives::util::generate_random_rseed;
+use zcash_primitives::keys::prf_expand;
 
 use blake2b_simd::{Hash as Blake2bHash, Params as Blake2bParams};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -177,4 +178,40 @@ pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_nullifier(
     let nf_bytes = nf.as_slice();
 
     env.byte_array_from_slice(&nf_bytes).expect("Could not convert u8 vec into java byte array!")
+}
+
+/// Convert pre Zip212 rcm to the new form
+#[no_mangle]
+pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_convertRseed(
+    env: JNIEnv<'_>,
+    _: JClass<'_>,
+    rcm: jbyteArray
+) -> jbyteArray {
+    let rcm_slice = env.convert_byte_array(rcm).unwrap();
+
+    let mut rcm_array: [u8; 32] = [0; 32];
+    rcm_array[..32].copy_from_slice(&rcm_slice);
+
+    let rcm_fr = jubjub::Fr::from_bytes_wide(prf_expand(&rcm_array, &[0x04]).as_array());
+    let rcm_fr_bytes = rcm_fr.to_bytes();
+
+    env.byte_array_from_slice(&rcm_fr_bytes).expect("Could not convert u8 vec into java byte array!")
+}
+
+/// Convert pre Zip212 esk to after Zip212 form
+#[no_mangle]
+pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_convertEsk(
+    env: JNIEnv<'_>,
+    _: JClass<'_>,
+    esk: jbyteArray
+) -> jbyteArray {
+    let esk_slice = env.convert_byte_array(esk).unwrap();
+
+    let mut esk_array: [u8; 32] = [0; 32];
+    esk_array[..32].copy_from_slice(&esk_slice);
+
+    let esk_fr = jubjub::Fr::from_bytes_wide(prf_expand(&esk_array, &[0x05]).as_array());
+    let esk_fr_bytes = esk_fr.to_bytes();
+
+    env.byte_array_from_slice(&esk_fr_bytes).expect("Could not convert u8 vec into java byte array!")
 }
