@@ -36,11 +36,37 @@ class ZecLibRustApiTest {
         println("res1 = $res1")
     }
 
+    /**
+     * Testing the transaction from link
+     * https://zecbook-testnet.guarda.co/tx/daed4586184b1b4e22bf29b1d9fe78817607e7516e2fce1d5eedf7341007800a
+     * with right method parameters
+     */
     @Test
-    fun testCmRseed() {
+    fun testCmRseedPositive() {
 //        val cmuExpected = "40051aeb99e2b7cf32591ca710b2ba1b4e9413feb99d52b8c931184a4f094314"
         val cmuExpected = "101015eca2b76b0fb002d05eb1bd1bb8be61c26419dd5f4269bf51d399909ca4"
-        val res1 = ZecLibRustApi.cmRseed(reverseByteArray(ivkSecond),  (plainTextSecond))
+        val epkExpected = "e955a1e8fdfe4008ed5d41607cc4c555aecc0ff8ac39c1a01acd75994f5167d2"
+        val res1 = ZecLibRustApi.cmRseed(reverseByteArray(ivkSecond),  (plainTextSecond), reverseByteArray(hexToBytes(epkExpected)))
+        println("res1 = ${Arrays.toString(res1)}")
+        println("res1 hex = ${bytesToHex(res1)}")
+
+        val cmuFromLibRevertedHex = bytesToHex(reverseByteArray(res1))
+        println("res1 hex reverted = $cmuFromLibRevertedHex")
+
+        assertEquals(cmuExpected, cmuFromLibRevertedHex)
+    }
+
+    /**
+     * Testing the transaction from link
+     * https://zecbook-testnet.guarda.co/tx/daed4586184b1b4e22bf29b1d9fe78817607e7516e2fce1d5eedf7341007800a
+     * with incorrect epkExpected parameter
+     */
+    @Test
+    fun testCmRseedNegative() {
+//        val cmuExpected = "40051aeb99e2b7cf32591ca710b2ba1b4e9413feb99d52b8c931184a4f094314"
+        val cmuExpected = ""
+        val epkExpected = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        val res1 = ZecLibRustApi.cmRseed(reverseByteArray(ivkSecond),  (plainTextSecond), reverseByteArray(hexToBytes(epkExpected)))
         println("res1 = ${Arrays.toString(res1)}")
         println("res1 hex = ${bytesToHex(res1)}")
 

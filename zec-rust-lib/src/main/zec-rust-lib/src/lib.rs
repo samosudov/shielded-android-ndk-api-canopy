@@ -77,13 +77,12 @@ pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_cmRseed(
     env: JNIEnv<'_>,
     _: JClass<'_>,
     ivk: jbyteArray,
-    plaintext: jbyteArray
+    plaintext: jbyteArray,
+    epk: jbyteArray
 ) -> jbyteArray {
     let ivk = env.convert_byte_array(ivk).unwrap();
     let plaintext = env.convert_byte_array(plaintext).unwrap();
-
-    // assert_eq!(ivk.len(), 32);
-    // assert_eq!(plaintext.len(), COMPACT_NOTE_SIZE);
+    let epk = env.convert_byte_array(epk).unwrap();
 
     let mut ivk_array: [u8; 32] = [0; 32];
     ivk_array[..32].copy_from_slice(&ivk);
@@ -113,7 +112,17 @@ pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_cmRseed(
     let cmu = note.cmu();
     let cmu_bytes = cmu.to_bytes();
 
-    env.byte_array_from_slice(&cmu_bytes).expect("Could not convert u8 vec into java byte array!")
+    let mut epk_array: [u8; 32] = [0; 32];
+    epk_array[..32].copy_from_slice(&epk);
+
+    let derived_esk = note.derive_esk().unwrap();
+    let note_derived_esk = (note.g_d * derived_esk).to_bytes();
+
+    return if note_derived_esk == epk_array {
+        env.byte_array_from_slice(&cmu_bytes).expect("Could not convert u8 vec into java byte array!")
+    } else {
+        env.byte_array_from_slice(&[0; 0]).expect("Could not convert u8 vec into java byte array!")
+    }
 }
 
 /// Compute nullifier

@@ -32,7 +32,8 @@ public class ZecLibRustApi {
                                           final byte[] cipher);
 
     public static native byte[] cmRseed(final byte[] ivk,
-                                          final byte[] plaintext);
+                                        final byte[] plaintext,
+                                        final byte[] epk);
 
     public static native byte[] nullifier(final byte[] ivk,
                                           final byte[] plaintext,
