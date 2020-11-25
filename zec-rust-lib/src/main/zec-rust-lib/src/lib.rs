@@ -18,9 +18,9 @@ use zcash_primitives::keys::prf_expand;
 use blake2b_simd::{Hash as Blake2bHash, Params as Blake2bParams};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crypto_api_chachapoly::{ChaCha20Ietf, ChachaPolyIetf};
-use ff::PrimeField;
+use ff::{Field, PrimeField};
 use group::{cofactor::CofactorGroup, GroupEncoding};
-use rand_core::{CryptoRng, RngCore, OsRng};
+use rand_core::{CryptoRng, RngCore};
 use std::convert::TryInto;
 use std::fmt;
 use std::str;
@@ -35,7 +35,7 @@ use jni::{
     sys::{jboolean, jbyteArray, jint, jlong, jobjectArray, jstring, JNI_FALSE, JNI_TRUE},
     JNIEnv,
 };
-use rand::{Rand, Rng, SeedableRng, XorShiftRng, thread_rng};
+use rand::{rngs::OsRng, Rng, SeedableRng, thread_rng};
 
 const COMPACT_NOTE_SIZE: usize = 1 + // version
     11 + // diversifier
@@ -45,9 +45,6 @@ const COMPACT_NOTE_SIZE: usize = 1 + // version
 /// Return 32 byte random scalar, uniformly.
 #[no_mangle]
 pub extern "system" fn librustzcash_sapling_generate_r(result: *mut [c_uchar; 32]) {
-    // create random 64 byte buffer
-    let mut rng = OsRng;
-    let mut buffer = [0u8; 32];
 
     let result = unsafe { &mut *result };
 
@@ -229,4 +226,17 @@ pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_convertEsk
     let esk_fr_bytes = esk_fr.to_bytes();
 
     env.byte_array_from_slice(&esk_fr_bytes).expect("Could not convert u8 vec into java byte array!")
+}
+
+/// Generation a random Alpha parameter
+#[no_mangle]
+pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_randomAlpha(
+    env: JNIEnv<'_>,
+    _: JClass<'_>
+) -> jbyteArray {
+    let mut rng = OsRng;
+    let alpha_fr = jubjub::Fr::random(&mut rng);
+    let alpha_fr_bytes = alpha_fr.to_bytes();
+
+    env.byte_array_from_slice(&alpha_fr_bytes).expect("Could not convert u8 vec into java byte array!")
 }

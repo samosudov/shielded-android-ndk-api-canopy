@@ -44,6 +44,8 @@ public class ZecLibRustApi {
     public static native byte[] convertRseed(final byte[] rcm);
     public static native byte[] convertEsk(final byte[] esk);
 
+    public static native byte[] randomAlpha();
+
 
     //endregion
 

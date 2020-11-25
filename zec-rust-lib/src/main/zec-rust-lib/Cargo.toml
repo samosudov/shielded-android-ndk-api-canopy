@@ -10,7 +10,7 @@ zcash_primitives = { path = "zcash_primitives" }
 
 jni = { version = "0.10", default-features = false }
 libc = "0.2"
-rand = "0.4"
+rand = "0.7"
 blake2b_simd = "0.5"
 byteorder = "1"
 crypto_api_chachapoly = "0.4"

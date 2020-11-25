@@ -1,11 +1,9 @@
 package work.samosudov.zecrustlib
 
 import androidx.test.core.app.ApplicationProvider
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
-import work.samosudov.zecrustlib.crypto.Utils
 import work.samosudov.zecrustlib.crypto.Utils.*
 import java.util.*
 
@@ -147,6 +145,20 @@ class ZecLibRustApiTest {
         val resBytes = ZecLibRustApi.convertEsk(eskBytes)
         println("res1 = ${Arrays.toString(resBytes)}")
         println("res1 hex = ${bytesToHex(resBytes)}")
+    }
+
+    @Test
+    fun testRandomAlpha() {
+        val randomAlphaFirst = ZecLibRustApi.randomAlpha()
+        val randomAlphaSecond = ZecLibRustApi.randomAlpha()
+
+        println("randomAlphaFirst = ${Arrays.toString(randomAlphaFirst)}")
+        println("randomAlphaSecond = ${Arrays.toString(randomAlphaSecond)}")
+
+        assertEquals(randomAlphaFirst.size, 32)
+        assertEquals(randomAlphaSecond.size, 32)
+
+        assertNotEquals(randomAlphaFirst, randomAlphaSecond)
     }
 
 }
