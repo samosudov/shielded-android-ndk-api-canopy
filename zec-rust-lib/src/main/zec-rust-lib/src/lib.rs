@@ -84,6 +84,7 @@ pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_cmRseed(
     let plaintext = env.convert_byte_array(plaintext).unwrap();
     let epk = env.convert_byte_array(epk).unwrap();
 
+
     let mut ivk_array: [u8; 32] = [0; 32];
     ivk_array[..32].copy_from_slice(&ivk);
     let ivk_fs = jubjub::Fr::from_repr(ivk_array);
@@ -104,7 +105,12 @@ pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_cmRseed(
     };
 
     let diversifier = Diversifier(d);
-    let pk_d = diversifier.g_d().unwrap() * ivk_fs.unwrap();
+
+    let g_d = match diversifier.g_d() {
+        Some(ret) => ret,
+        _ => return env.byte_array_from_slice(&[0; 0]).expect("Could not convert u8 vec into java byte array!"),
+    };
+    let pk_d = g_d * ivk_fs.unwrap();
 
     let to = PaymentAddress::from_parts(diversifier, pk_d).unwrap();
     let note = to.create_note(v.unwrap(), rseed).unwrap();

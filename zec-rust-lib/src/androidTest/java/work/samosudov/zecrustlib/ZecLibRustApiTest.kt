@@ -2,6 +2,7 @@ package work.samosudov.zecrustlib
 
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import work.samosudov.zecrustlib.crypto.Utils
@@ -39,11 +40,10 @@ class ZecLibRustApiTest {
     /**
      * Testing the transaction from link
      * https://zecbook-testnet.guarda.co/tx/daed4586184b1b4e22bf29b1d9fe78817607e7516e2fce1d5eedf7341007800a
-     * with right method parameters
+     * with correct method's parameters
      */
     @Test
     fun testCmRseedPositive() {
-//        val cmuExpected = "40051aeb99e2b7cf32591ca710b2ba1b4e9413feb99d52b8c931184a4f094314"
         val cmuExpected = "101015eca2b76b0fb002d05eb1bd1bb8be61c26419dd5f4269bf51d399909ca4"
         val epkExpected = "e955a1e8fdfe4008ed5d41607cc4c555aecc0ff8ac39c1a01acd75994f5167d2"
         val res1 = ZecLibRustApi.cmRseed(reverseByteArray(ivkSecond),  (plainTextSecond), reverseByteArray(hexToBytes(epkExpected)))
@@ -63,7 +63,6 @@ class ZecLibRustApiTest {
      */
     @Test
     fun testCmRseedNegative() {
-//        val cmuExpected = "40051aeb99e2b7cf32591ca710b2ba1b4e9413feb99d52b8c931184a4f094314"
         val cmuExpected = ""
         val epkExpected = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
         val res1 = ZecLibRustApi.cmRseed(reverseByteArray(ivkSecond),  (plainTextSecond), reverseByteArray(hexToBytes(epkExpected)))
@@ -74,6 +73,21 @@ class ZecLibRustApiTest {
         println("res1 hex reverted = $cmuFromLibRevertedHex")
 
         assertEquals(cmuExpected, cmuFromLibRevertedHex)
+    }
+
+    /**
+     * diversifier parameter doesn't belong to the full sapling key with the given ivk
+     */
+    @Test
+    fun testCmRseedDiversifierNegative() {
+        val ivkBytes = hexToBytes("00c11ba0a37371bd41ba456fb95d36c09b55d2ac9fa9e62bc71d1b08d3bc78b4")
+        val ptBytes = byteArrayOf(2, 107, 32, 71, -62, -6, 78, -7, -113, -2, -91, 59, -110, -53, 62, 53, -47, -37, 86, 61, -86, 116, -58, -116, -110, 68, -91, 5, -64, 90, 106, 1, -53, -97, 13, -102, -9, 98, -36, 23, 93, -44, -11, 27, 116, 115, 107, 8, -114, 113, 116, 7)
+        val epkBytes = hexToBytes("07a3001c94ee4ccdbb65a20b332129a3a0395b0b7db26effad7b9cd24a35de0b")
+
+        val res6 = ZecLibRustApi.cmRseed(reverseByteArray(ivkBytes),  (ptBytes), reverseByteArray(epkBytes))
+        println("res6 = ${Arrays.toString(res6)}")
+
+        assertTrue(res6.isEmpty())
     }
 
     @Test
