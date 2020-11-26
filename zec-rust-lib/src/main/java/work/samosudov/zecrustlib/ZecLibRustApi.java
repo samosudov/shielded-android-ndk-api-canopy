@@ -46,6 +46,11 @@ public class ZecLibRustApi {
 
     public static native byte[] randomAlpha();
 
+    // C++ methods
+
+    public static native byte[] merklePathToWitness(final boolean[][] authPathsArr,
+                                           final boolean[] indexesArr);
+
 
     //endregion
 

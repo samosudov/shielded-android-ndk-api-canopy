@@ -2,6 +2,7 @@ extern crate jni;
 extern crate libc;
 extern crate rand;
 extern crate blake2b_simd;
+extern crate bls12_381;
 extern crate byteorder;
 extern crate crypto_api_chachapoly;
 extern crate ff;
@@ -9,11 +10,16 @@ extern crate group;
 extern crate rand_core;
 extern crate jubjub;
 extern crate zcash_primitives;
+extern crate zcash_proofs;
 
 use zcash_primitives::consensus::{self, BlockHeight, NetworkUpgrade::Canopy, ZIP212_GRACE_PERIOD, TEST_NETWORK};
-use zcash_primitives::primitives::{Diversifier, Note, PaymentAddress, Rseed, ValueCommitment, ViewingKey};
+use zcash_primitives::primitives::{Diversifier, Note, PaymentAddress, Rseed, ValueCommitment, ViewingKey, ProofGenerationKey};
+use zcash_primitives::merkle_tree::{MerklePath};
 use zcash_primitives::util::generate_random_rseed;
 use zcash_primitives::keys::prf_expand;
+use zcash_primitives::constants::{SPENDING_KEY_GENERATOR};
+
+use zcash_proofs::prover::{LocalTxProver};
 
 use blake2b_simd::{Hash as Blake2bHash, Params as Blake2bParams};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -41,6 +47,8 @@ const COMPACT_NOTE_SIZE: usize = 1 + // version
     11 + // diversifier
     8  + // value
     32; // rcv
+
+static mut LOCAL_TX_PROVER: LocalTxProver = LocalTxProver::from_bytes(&[0u8], &[0u8]);
 
 /// Return 32 byte random scalar, uniformly.
 #[no_mangle]
@@ -239,4 +247,92 @@ pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_randomAlph
     let alpha_fr_bytes = alpha_fr.to_bytes();
 
     env.byte_array_from_slice(&alpha_fr_bytes).expect("Could not convert u8 vec into java byte array!")
+}
+
+/// Initialization transaction prover with local param's files
+#[no_mangle]
+pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_initTxProver(
+    env: JNIEnv<'_>,
+    _: JClass<'_>,
+    spend_bytes: jbyteArray,
+    output_bytes: jbyteArray
+) {
+    let spend_param_bytes = env.convert_byte_array(spend_bytes).unwrap();
+    let output_param_bytes = env.convert_byte_array(output_bytes).unwrap();
+
+    unsafe {
+        LOCAL_TX_PROVER = LocalTxProver::from_bytes(&spend_param_bytes, &output_param_bytes);
+    }
+}
+
+/// Build transaction's spend proof
+#[no_mangle]
+pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_spendProof(
+    env: JNIEnv<'_>,
+    _: JClass<'_>,
+    ask_j_bytes: jbyteArray,
+    nsk_j_bytes: jbyteArray,
+    d_j_bytes: jbyteArray,
+    r_j_bytes: jbyteArray,
+    alpha_j_bytes: jbyteArray,
+    value_j_long: jlong,
+    anchor_j_bytes: jbyteArray,
+    withess_j_bytes: jbyteArray,
+) -> jbyteArray {
+    let ask_bytes = env.convert_byte_array(ask_j_bytes).unwrap();
+    let nsk_bytes = env.convert_byte_array(nsk_j_bytes).unwrap();
+    let diversifier_bytes = env.convert_byte_array(d_j_bytes).unwrap();
+    let r_bytes = env.convert_byte_array(r_j_bytes).unwrap();
+    let alpha_bytes = env.convert_byte_array(alpha_j_bytes).unwrap();
+    let anchor_bytes = env.convert_byte_array(anchor_j_bytes).unwrap();
+    let withess_bytes = env.convert_byte_array(withess_j_bytes).unwrap();
+
+    // Proving context
+    let mut ctx = LOCAL_TX_PROVER.new_sapling_proving_context();
+
+    // ProofGenerationKey
+    let proof_generation_key = ProofGenerationKey {
+        ak: SPENDING_KEY_GENERATOR * ask_bytes,
+        nsk: nsk_bytes,
+    };
+
+    // Diversifier
+    let mut diversifier_array: [u8; 11] = [0; 11];
+    diversifier_array[..11].copy_from_slice(&diversifier_bytes);
+    let diversifier = Diversifier(diversifier_array);
+
+    // Rseed
+    let mut r_array: [u8; 32] = [0; 32];
+    r_array[..32].copy_from_slice(&r_bytes);
+    let rseed = Rseed::AfterZip212(r_array);
+
+    // Alpha
+    let mut alpha_array: [u8; 32] = [0; 32];
+    alpha_array[..32].copy_from_slice(&alpha_bytes);
+    let alpha_fr = jubjub::Fr::from_bytes(&alpha_array);
+
+    // Value
+    let value = value_j_long as u64;
+
+    // Anchor
+    let anchor = bls12_381::Scalar::from_bytes(&anchor_bytes);
+
+    // MarklePath
+    let merkle_path = MerklePath::from_slice(withess_bytes);
+
+    let (zkproof, cv, rk) = LOCAL_TX_PROVER
+        .spend_proof(
+            &mut ctx,
+            proof_generation_key,
+            diversifier,
+            rseed,
+            alpha_fr,
+            value,
+            anchor,
+            merkle_path.clone(),
+        );
+
+
+    // TODO: compute returned value
+    env.byte_array_from_slice(&[0; 32]).expect("Could not convert u8 vec into java byte array!")
 }
