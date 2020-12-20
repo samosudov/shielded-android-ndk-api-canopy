@@ -53,6 +53,12 @@ android {
         }
     }
 
+    sourceSets {
+        androidTest {
+            assets.srcDirs = ['src/main/assets', 'src/androidTest/assets/', 'src/debug/assets/']
+        }
+    }
+
 }
 
 dependencies {

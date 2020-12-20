@@ -1,6 +1,7 @@
 package work.samosudov.zecrustlib
 
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -48,21 +49,24 @@ class MerklePathTest {
         val indexArray = booleanArrayOf(false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, true, false, false, true, true, true, true, true, true, false, true)
     }
 
-    @Before
-    fun initNativeLibrary() {
-        try {
-            ZecLibRustApi.init(ApplicationProvider.getApplicationContext())
-        } catch (e: Exception) {
-            println("ZecLibRustApi.init e=${e.message}")
-        }
-    }
+//    @Before
+//    fun initNativeLibrary() {
+//        ZecLibRustApi.init(ApplicationProvider.getApplicationContext())
+//        ZecLibRustApi.initSaplingParams(InstrumentationRegistry.getInstrumentation().context.assets)
+//        ZecLibRustApi.initSaplingParamsFromPaths(InstrumentationRegistry.getInstrumentation().context)
+//    }
 
     @Test
     fun testMerklePathToWitness() {
-        //TODO: init sapling params files
-
         val merklePathToWitness = ZecLibRustApi.merklePathToWitness(authArray, indexArray)
 
         println("merklePathToWitness = ${Arrays.toString(merklePathToWitness)}")
     }
+
+    @Test
+    fun testInitParamsFromPath() {
+        ZecLibRustApi.init(ApplicationProvider.getApplicationContext())
+        ZecLibRustApi.initSaplingParamsFromPaths(InstrumentationRegistry.getInstrumentation().context)
+    }
+
 }

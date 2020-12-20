@@ -12,43 +12,62 @@ extern crate jubjub;
 extern crate zcash_primitives;
 extern crate zcash_proofs;
 
+#[macro_use]
+extern crate lazy_static;
+extern crate mut_static;
+
+
 use zcash_primitives::consensus::{self, BlockHeight, NetworkUpgrade::Canopy, ZIP212_GRACE_PERIOD, TEST_NETWORK};
-use zcash_primitives::primitives::{Diversifier, Note, PaymentAddress, Rseed, ValueCommitment, ViewingKey, ProofGenerationKey};
+use zcash_primitives::primitives::{Diversifier, PaymentAddress, Rseed, ViewingKey, ProofGenerationKey};
 use zcash_primitives::merkle_tree::{MerklePath};
-use zcash_primitives::util::generate_random_rseed;
 use zcash_primitives::keys::prf_expand;
 use zcash_primitives::constants::{SPENDING_KEY_GENERATOR};
+use zcash_primitives::prover::{TxProver};
 
 use zcash_proofs::prover::{LocalTxProver};
 
-use blake2b_simd::{Hash as Blake2bHash, Params as Blake2bParams};
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use crypto_api_chachapoly::{ChaCha20Ietf, ChachaPolyIetf};
+use byteorder::{LittleEndian, ReadBytesExt};
 use ff::{Field, PrimeField};
-use group::{cofactor::CofactorGroup, GroupEncoding};
-use rand_core::{CryptoRng, RngCore};
-use std::convert::TryInto;
-use std::fmt;
-use std::str;
+use group::{GroupEncoding};
 
-use std::io::{self, BufReader};
-use std::ffi::CStr;
-
-use libc::{c_char, c_uchar, int64_t, size_t, uint32_t, uint64_t};
+use libc::{c_uchar};
 
 use jni::{
     objects::{JClass, JString},
-    sys::{jboolean, jbyteArray, jint, jlong, jobjectArray, jstring, JNI_FALSE, JNI_TRUE},
+    sys::{jbyteArray, jint, jlong, jstring},
     JNIEnv,
 };
-use rand::{rngs::OsRng, Rng, SeedableRng, thread_rng};
+use std::ffi::CStr;
+use std::path::Path;
+use rand::{rngs::OsRng};
+use lazy_static::lazy_static;
+use mut_static::MutStatic;
 
 const COMPACT_NOTE_SIZE: usize = 1 + // version
     11 + // diversifier
     8  + // value
     32; // rcv
 
-static mut LOCAL_TX_PROVER: LocalTxProver = LocalTxProver::from_bytes(&[0u8], &[0u8]);
+// lazy_static! {
+//      let LOCAL_TX_PROVER: LocalTxProver = {
+//         let mut prover = LocalTxProver::from_bytes(&[0u8], &[0u8]);;
+//         prover
+//     };
+// }
+
+lazy_static! {
+    pub static ref LOCAL_TX_PROVER: MutStatic<LocalTxProver> = {
+        let tx_prover = match LocalTxProver::with_default_location() {
+            Some(tx_prover) => tx_prover,
+            None => {
+                panic!("Cannot locate the Zcash parameters. Please run zcash-fetch-params or fetch-params.sh to download the parameters, and then re-run the tests.");
+            }
+        };
+        // MutStatic::from(LocalTxProver::from_bytes(&[0u8], &[0u8]))
+        MutStatic::from(tx_prover)
+    };
+}
+
 
 /// Return 32 byte random scalar, uniformly.
 #[no_mangle]
@@ -256,13 +275,60 @@ pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_initTxProv
     _: JClass<'_>,
     spend_bytes: jbyteArray,
     output_bytes: jbyteArray
-) {
-    let spend_param_bytes = env.convert_byte_array(spend_bytes).unwrap();
-    let output_param_bytes = env.convert_byte_array(output_bytes).unwrap();
+) -> jbyteArray {
+    let mut spend_param_bytes = env.convert_byte_array(spend_bytes).unwrap();
+    let mut output_param_bytes = env.convert_byte_array(output_bytes).unwrap();
 
-    unsafe {
-        LOCAL_TX_PROVER = LocalTxProver::from_bytes(&spend_param_bytes, &output_param_bytes);
-    }
+    let spend_param_array = spend_param_bytes.as_mut_slice();
+    let output_param_array = output_param_bytes.as_mut_slice();
+
+    // let prover = LocalTxProver::from_bytes(&spend_param_array, &output_param_array);
+    let prover = LocalTxProver::from_bytes(&[0u8], &[0u8]);
+    LOCAL_TX_PROVER.set(prover).unwrap();
+
+    env.byte_array_from_slice(&[0; 32]).expect("Could not convert u8 vec into java byte array!")
+    // unsafe {
+        // LOCAL_TX_PROVER.with(|prover_cell| {
+        //     let prover = prover_cell.borrow_mut().as_mut().unwrap();
+        //     *prover = LocalTxProver::from_bytes(&spend_param_array, &output_param_array);
+        // });
+
+
+        // LOCAL_TX_PROVER = LocalTxProver::from_bytes(&spend_param_array, &output_param_array);
+        // let mut prover = LOCAL_TX_PROVER.lock().unwrap();
+        // *prover = LocalTxProver::from_bytes(&spend_param_array, &output_param_array);
+    // }
+}
+
+
+/// Initialization transaction prover from local param's files paths
+#[no_mangle]
+pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_initTxProverFromPaths(
+    env: JNIEnv<'_>,
+    _: JClass<'_>,
+    spend_path_absolute: JString,
+    output_path_absolute: JString
+) -> jbyteArray {
+    let spend_path_ptr = env.get_string(spend_path_absolute).expect("invalid pattern string").as_ptr();
+    let output_path_ptr = env.get_string(output_path_absolute).expect("invalid pattern string").as_ptr();
+
+    let spend_path_cstr = CStr::from_ptr(spend_path_ptr);
+    let output_path_cstr = CStr::from_ptr(output_path_ptr);
+
+    let tx_prover = LocalTxProver::new(
+        Path::new(&spend_path_cstr.to_str().unwrap()),
+        Path::new(&output_path_cstr.to_str().unwrap()),
+    );
+
+    LOCAL_TX_PROVER.set(tx_prover).unwrap();
+
+    let prover = LOCAL_TX_PROVER.read().unwrap();
+    let mut ctx = prover.new_sapling_proving_context();
+
+    let bsk = ctx.bsk;
+    let bsk_bytes = bsk.to_bytes();
+
+    env.byte_array_from_slice(&bsk_bytes).expect("Could not convert u8 vec into java byte array!")
 }
 
 /// Build transaction's spend proof
@@ -285,15 +351,22 @@ pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_spendProof
     let r_bytes = env.convert_byte_array(r_j_bytes).unwrap();
     let alpha_bytes = env.convert_byte_array(alpha_j_bytes).unwrap();
     let anchor_bytes = env.convert_byte_array(anchor_j_bytes).unwrap();
-    let withess_bytes = env.convert_byte_array(withess_j_bytes).unwrap();
+    let mut withess_bytes = env.convert_byte_array(withess_j_bytes).unwrap();
 
-    // Proving context
-    let mut ctx = LOCAL_TX_PROVER.new_sapling_proving_context();
+    // Ask
+    let mut ask_array: [u8; 32] = [0; 32];
+    ask_array[..32].copy_from_slice(&ask_bytes);
+    let ask_fr = jubjub::Fr::from_bytes(&ask_array);
+
+    // Nsk
+    let mut nsk_array: [u8; 32] = [0; 32];
+    nsk_array[..32].copy_from_slice(&nsk_bytes);
+    let nsk_fr = jubjub::Fr::from_bytes(&nsk_array);
 
     // ProofGenerationKey
     let proof_generation_key = ProofGenerationKey {
-        ak: SPENDING_KEY_GENERATOR * ask_bytes,
-        nsk: nsk_bytes,
+        ak: SPENDING_KEY_GENERATOR * ask_fr.unwrap(),
+        nsk: nsk_fr.unwrap(),
     };
 
     // Diversifier
@@ -315,22 +388,28 @@ pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_spendProof
     let value = value_j_long as u64;
 
     // Anchor
-    let anchor = bls12_381::Scalar::from_bytes(&anchor_bytes);
+    let mut anchor_array: [u8; 32] = [0; 32];
+    anchor_array[..32].copy_from_slice(&anchor_bytes);
+    let anchor = bls12_381::Scalar::from_bytes(&anchor_array);
 
     // MarklePath
-    let merkle_path = MerklePath::from_slice(withess_bytes);
+    let witness_array = withess_bytes.as_mut_slice();
+    let merkle_path = MerklePath::from_slice(&witness_array);
 
-    let (zkproof, cv, rk) = LOCAL_TX_PROVER
+    let prover = LOCAL_TX_PROVER.read().unwrap();
+    let mut ctx = prover.new_sapling_proving_context();
+
+    let (zkproof, cv, rk) = prover
         .spend_proof(
             &mut ctx,
             proof_generation_key,
             diversifier,
             rseed,
-            alpha_fr,
+            alpha_fr.unwrap(),
             value,
-            anchor,
-            merkle_path.clone(),
-        );
+            anchor.unwrap(),
+            merkle_path.unwrap().clone(),
+        ).unwrap();
 
 
     // TODO: compute returned value

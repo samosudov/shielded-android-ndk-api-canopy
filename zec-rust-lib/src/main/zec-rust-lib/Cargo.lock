@@ -355,6 +355,12 @@ dependencies = [
 
 [[package]]
 name = "error-chain"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9435d864e017c3c6afeac1654189b06cdb491cf2ff73dbf0d73b0f292f42ff8"
+
+[[package]]
+name = "error-chain"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07e791d3be96241c77c43846b665ef1384606da2cd2a48730abe606a12906e02"
@@ -461,7 +467,7 @@ checksum = "1ecfa3b81afc64d9a6539c4eece96ac9a93c551c713a313800dade8e33d7b5c1"
 dependencies = [
  "cesu8",
  "combine",
- "error-chain",
+ "error-chain 0.12.0",
  "jni-sys",
  "log",
  "walkdir",
@@ -527,6 +533,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "043175f069eda7b85febe4a74abbaeff828d9f8b448515d3151a14a3542811aa"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "mut_static"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "248cd8eb389a4e3618bba47c9a171a4bbb271c29c07e03c4ff4ff74946336f66"
+dependencies = [
+ "error-chain 0.10.0",
 ]
 
 [[package]]
@@ -836,7 +851,9 @@ dependencies = [
  "group",
  "jni",
  "jubjub",
+ "lazy_static",
  "libc",
+ "mut_static",
  "rand",
  "rand_core",
  "zcash_primitives",

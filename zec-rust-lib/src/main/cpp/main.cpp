@@ -3,6 +3,10 @@
 
 #include "zec_rust_lib.h"
 #include "uint256.h"
+#include "serialize.h"
+#include "streams.h"
+#include "version.h"
+#include "zcash/IncrementalMerkleTree.hpp"
 
 #include <jni.h>
 #include <string>
@@ -46,7 +50,7 @@ Java_work_samosudov_zecrustlib_ZecLibRustApi_testUint256(
 
 
 JNIEXPORT jbyteArray JNICALL
-Java_work_samosudov_rustlib_RustAPI_merklePathToWitness(
+Java_work_samosudov_zecrustlib_ZecLibRustApi_merklePathToWitness(
         JNIEnv *env,
         jobject,
         jobjectArray authPathsArr,
