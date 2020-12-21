@@ -49,12 +49,10 @@ class MerklePathTest {
         val indexArray = booleanArrayOf(false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, true, false, false, true, false, true, false, false, true, true, true, true, true, true, false, true)
     }
 
-//    @Before
-//    fun initNativeLibrary() {
-//        ZecLibRustApi.init(ApplicationProvider.getApplicationContext())
-//        ZecLibRustApi.initSaplingParams(InstrumentationRegistry.getInstrumentation().context.assets)
-//        ZecLibRustApi.initSaplingParamsFromPaths(InstrumentationRegistry.getInstrumentation().context)
-//    }
+    @Before
+    fun initNativeLibrary() {
+        ZecLibRustApi.init(ApplicationProvider.getApplicationContext())
+    }
 
     @Test
     fun testMerklePathToWitness() {
@@ -64,9 +62,19 @@ class MerklePathTest {
     }
 
     @Test
+    fun testInitParamsFromAssets() {
+        ZecLibRustApi.initSaplingParams(InstrumentationRegistry.getInstrumentation().context.assets)
+    }
+
+    @Test
     fun testInitParamsFromPath() {
-        ZecLibRustApi.init(ApplicationProvider.getApplicationContext())
         ZecLibRustApi.initSaplingParamsFromPaths(InstrumentationRegistry.getInstrumentation().context)
     }
+
+    @Test
+    fun testInitTestString() {
+        ZecLibRustApi.initTestFile(InstrumentationRegistry.getInstrumentation().context)
+    }
+
 
 }

@@ -39,6 +39,8 @@ use jni::{
 };
 use std::ffi::CStr;
 use std::path::Path;
+use std::fs::File;
+use std::io::prelude::*;
 use rand::{rngs::OsRng};
 use lazy_static::lazy_static;
 use mut_static::MutStatic;
@@ -48,24 +50,8 @@ const COMPACT_NOTE_SIZE: usize = 1 + // version
     8  + // value
     32; // rcv
 
-// lazy_static! {
-//      let LOCAL_TX_PROVER: LocalTxProver = {
-//         let mut prover = LocalTxProver::from_bytes(&[0u8], &[0u8]);;
-//         prover
-//     };
-// }
-
 lazy_static! {
-    pub static ref LOCAL_TX_PROVER: MutStatic<LocalTxProver> = {
-        let tx_prover = match LocalTxProver::with_default_location() {
-            Some(tx_prover) => tx_prover,
-            None => {
-                panic!("Cannot locate the Zcash parameters. Please run zcash-fetch-params or fetch-params.sh to download the parameters, and then re-run the tests.");
-            }
-        };
-        // MutStatic::from(LocalTxProver::from_bytes(&[0u8], &[0u8]))
-        MutStatic::from(tx_prover)
-    };
+    static ref LOCAL_TX_PROVER: MutStatic<LocalTxProver> = MutStatic::new();
 }
 
 
@@ -282,22 +268,16 @@ pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_initTxProv
     let spend_param_array = spend_param_bytes.as_mut_slice();
     let output_param_array = output_param_bytes.as_mut_slice();
 
-    // let prover = LocalTxProver::from_bytes(&spend_param_array, &output_param_array);
-    let prover = LocalTxProver::from_bytes(&[0u8], &[0u8]);
+    let prover = LocalTxProver::from_bytes(&spend_param_array, &output_param_array);
     LOCAL_TX_PROVER.set(prover).unwrap();
 
-    env.byte_array_from_slice(&[0; 32]).expect("Could not convert u8 vec into java byte array!")
-    // unsafe {
-        // LOCAL_TX_PROVER.with(|prover_cell| {
-        //     let prover = prover_cell.borrow_mut().as_mut().unwrap();
-        //     *prover = LocalTxProver::from_bytes(&spend_param_array, &output_param_array);
-        // });
+    let prover = LOCAL_TX_PROVER.read().unwrap();
+    let mut ctx = prover.new_sapling_proving_context();
 
+    let bsk = ctx.bsk;
+    let bsk_bytes = bsk.to_bytes();
 
-        // LOCAL_TX_PROVER = LocalTxProver::from_bytes(&spend_param_array, &output_param_array);
-        // let mut prover = LOCAL_TX_PROVER.lock().unwrap();
-        // *prover = LocalTxProver::from_bytes(&spend_param_array, &output_param_array);
-    // }
+    env.byte_array_from_slice(&bsk_bytes).expect("Could not convert u8 vec into java byte array!")
 }
 
 
@@ -309,15 +289,12 @@ pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_initTxProv
     spend_path_absolute: JString,
     output_path_absolute: JString
 ) -> jbyteArray {
-    let spend_path_ptr = env.get_string(spend_path_absolute).expect("invalid pattern string").as_ptr();
-    let output_path_ptr = env.get_string(output_path_absolute).expect("invalid pattern string").as_ptr();
-
-    let spend_path_cstr = CStr::from_ptr(spend_path_ptr);
-    let output_path_cstr = CStr::from_ptr(output_path_ptr);
+    let spend_path_cstr: String = env.get_string(spend_path_absolute).expect("invalid pattern string").into();
+    let output_path_cstr: String = env.get_string(output_path_absolute).expect("invalid pattern string").into();
 
     let tx_prover = LocalTxProver::new(
-        Path::new(&spend_path_cstr.to_str().unwrap()),
-        Path::new(&output_path_cstr.to_str().unwrap()),
+        Path::new(&spend_path_cstr),
+        Path::new(&output_path_cstr)
     );
 
     LOCAL_TX_PROVER.set(tx_prover).unwrap();
@@ -329,6 +306,30 @@ pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_initTxProv
     let bsk_bytes = bsk.to_bytes();
 
     env.byte_array_from_slice(&bsk_bytes).expect("Could not convert u8 vec into java byte array!")
+}
+
+
+/// Initialization test string
+#[no_mangle]
+pub unsafe extern "C" fn Java_work_samosudov_zecrustlib_ZecLibRustApi_initTestString(
+    env: JNIEnv<'_>,
+    _: JClass<'_>,
+    spend_path_absolute: JString
+) -> jbyteArray {
+    let callput_string: String = env.get_string(spend_path_absolute).expect("Couldn't get a Java string!").into();
+
+    let mut foopath = "".to_string();
+    foopath.push_str(&callput_string);
+
+    let mut spend_fs = File::open(foopath).expect("couldn't load Sapling spend parameters file");
+
+    let mut contents = String::new();
+    spend_fs.read_to_string(&mut contents);
+
+    let output = env.new_string(&contents)
+        .expect("Couldn't create java string!");
+
+    output.into_inner()
 }
 
 /// Build transaction's spend proof

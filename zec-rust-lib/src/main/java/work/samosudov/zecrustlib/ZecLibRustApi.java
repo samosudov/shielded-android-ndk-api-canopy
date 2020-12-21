@@ -3,26 +3,19 @@ package work.samosudov.zecrustlib;
 import android.content.Context;
 import android.content.res.AssetManager;
 import android.net.Uri;
-import android.os.FileUtils;
 import android.util.Log;
 
 import com.getkeepsafe.relinker.ReLinker;
 
 import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 
-
-import work.samosudov.zecrustlib.crypto.Bech32;
-import work.samosudov.zecrustlib.crypto.BitcoinCashBitArrayConverter;
-
-import static work.samosudov.zecrustlib.crypto.Utils.bytesToHex;
+import static work.samosudov.zecrustlib.crypto.Utils.reverseByteArray;
 
 public class ZecLibRustApi {
 
@@ -62,6 +55,8 @@ public class ZecLibRustApi {
     public static native byte[] initTxProverFromPaths(final String spendPath,
                                                       final String outputPath);
 
+    public static native String initTestString(final String spendPath);
+
 
     // C++ methods
 
@@ -77,13 +72,6 @@ public class ZecLibRustApi {
     public static void initSaplingParams(AssetManager assetManager) {
         Log.d(ZEC_LIB_RUST_TAG, "initSaplingParams started");
 
-        String spendPath = Uri.parse("file:///android_asset/sapling-spend.params").toString();
-        String outputPath = Uri.parse("file:///android_asset/sapling-output.params").toString();
-        File fileSpend = new File(spendPath);
-        File fileOutput = new File(outputPath);
-//        byte[] spendBytes = new byte[(int) fileSpend.length()];
-//        byte[] outputBytes = new byte[(int) fileOutput.length()];
-
         try {
             InputStream spendInputStream = assetManager.open("sapling-spend.params");
             InputStream outputInputStream = assetManager.open("sapling-output.params");
@@ -91,8 +79,6 @@ public class ZecLibRustApi {
             byte[] spendBytes = new byte[spendInputStream.available()];
             byte[] outputBytes = new byte[outputInputStream.available()];
 
-//            BufferedInputStream bufferSpend = new BufferedInputStream(new FileInputStream(fileSpend));
-//            BufferedInputStream bufferOutput = new BufferedInputStream(new FileInputStream(fileOutput));
             BufferedInputStream bufferSpend = new BufferedInputStream(spendInputStream);
             BufferedInputStream bufferOutput = new BufferedInputStream(outputInputStream);
             bufferSpend.read(spendBytes, 0, spendBytes.length);
@@ -100,7 +86,7 @@ public class ZecLibRustApi {
             bufferSpend.close();
             bufferOutput.close();
 
-            byte[] res = initTxProver(spendBytes, outputBytes);
+            byte[] res = initTxProver((spendBytes), (outputBytes));
             Log.d(ZEC_LIB_RUST_TAG, "initSaplingParams res: " + Arrays.toString(res));
         } catch (FileNotFoundException e) {
             Log.e(ZEC_LIB_RUST_TAG, "initSaplingParams FileNotFoundException: " + e.getMessage());
@@ -119,14 +105,15 @@ public class ZecLibRustApi {
         File cachedFileSpend = new File(context.getCacheDir(), "sapling-spend.params");
         File cachedFileOutput = new File(context.getCacheDir(), "sapling-output.params");
 
-//        if (cachedFileSpend.exists() && cachedFileOutput.exists()) return;
-
         try {
             InputStream spendInputStream = context.getAssets().open("sapling-spend.params");
             InputStream outputInputStream = context.getAssets().open("sapling-output.params");
 
             byte[] spendBytes = new byte[spendInputStream.available()];
             byte[] outputBytes = new byte[outputInputStream.available()];
+
+            spendInputStream.read(spendBytes);
+            outputInputStream.read(outputBytes);
 
             FileOutputStream paramSpendStream = new FileOutputStream(cachedFileSpend);
             FileOutputStream paramOutputStream = new FileOutputStream(cachedFileOutput);
@@ -149,6 +136,36 @@ public class ZecLibRustApi {
         Log.d(ZEC_LIB_RUST_TAG, "initSaplingParamsFromPaths cachedFileSpend path=" + cachedFileSpend.getAbsolutePath());
         Log.d(ZEC_LIB_RUST_TAG, "initSaplingParamsFromPaths cachedFileOutput path=" + cachedFileOutput.getAbsolutePath());
         Log.d(ZEC_LIB_RUST_TAG, "initSaplingParamsFromPaths done");
+    }
+
+    public static void initTestFile(Context context) {
+        Log.d(ZEC_LIB_RUST_TAG, "initTestFile started");
+
+        File cachedFileSpend = new File(context.getCacheDir(), "test-file.params");
+
+        try {
+            InputStream spendInputStream = context.getAssets().open("test-file.params");
+
+            byte[] spendBytes = new byte[spendInputStream.available()];
+            spendInputStream.read(spendBytes);
+            spendInputStream.close();
+
+            FileOutputStream paramSpendStream = new FileOutputStream(cachedFileSpend);
+
+            paramSpendStream.write(spendBytes);
+            paramSpendStream.flush();
+            paramSpendStream.close();
+
+            String spendPath = cachedFileSpend.getAbsolutePath();
+
+            String result = initTestString(spendPath);
+            Log.d(ZEC_LIB_RUST_TAG, "initTestFile result=" + result);
+        } catch (IOException e) {
+            Log.e(ZEC_LIB_RUST_TAG, "initTestFile IOException: " + e.getMessage());
+        }
+
+        Log.d(ZEC_LIB_RUST_TAG, "initTestFile cachedFileSpend path=" + cachedFileSpend.getAbsolutePath());
+        Log.d(ZEC_LIB_RUST_TAG, "initTestFile done");
     }
 
 }

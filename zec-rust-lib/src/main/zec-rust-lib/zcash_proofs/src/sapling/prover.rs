@@ -21,7 +21,7 @@ use crate::circuit::sapling::{Output, Spend};
 
 /// A context object for creating the Sapling components of a Zcash transaction.
 pub struct SaplingProvingContext {
-    bsk: jubjub::Fr,
+    pub bsk: jubjub::Fr,
     // (sum of the Spend value commitments) - (sum of the Output value commitments)
     cv_sum: jubjub::ExtendedPoint,
 }
